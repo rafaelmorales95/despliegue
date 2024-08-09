@@ -44,14 +44,12 @@ install_deb_package() {
     fi
 }
 
-
 # Función para activar el agente de Qualys
 activate_qualys_agent() {
     echo "Activando el agente de Qualys..."
     
-    sudo /usr/local/qualys/cloud-agent/bin/qualys-cloud-agent.sh 	ActivationId=e1f4f34f-8e56-4f2e-8336-484624b77091 CustomerId=72528eda-c400-5ba6-81d6-a154df946c4b ServerUri=https://qagpublic.qg4.apps.qualys.com/CloudAgent/
+    sudo /usr/local/qualys/cloud-agent/bin/qualys-cloud-agent.sh ActivationId=e1f4f34f-8e56-4f2e-8336-484624b77091 CustomerId=72528eda-c400-5ba6-81d6-a154df946c4b ServerUri=https://qagpublic.qg4.apps.qualys.com/CloudAgent/
 
-    
     if [ $? -ne 0 ]; then
         echo "Error al activar el agente de Qualys."
         exit 1
@@ -60,12 +58,35 @@ activate_qualys_agent() {
     echo "Agente de Qualys activado."
 }
 
+# Función para verificar si el proceso bdsec está activo
+check_bdsec_process() {
+    echo "Verificando si el proceso 'bdsec' está activo..."
+    
+    if systemctl status bdsec >/dev/null 2>&1; then
+        echo "El proceso 'bdsec' está activo."
+    else
+        echo "El proceso 'bdsec' no está activo."
+    fi
+}
+
+# Función para verificar el estado del servicio auditd
+check_auditd_service() {
+    echo "Verificando el estado del servicio 'auditd'..."
+    
+    if systemctl status auditd >/dev/null 2>&1; then
+        echo "El servicio 'auditd' está activo."
+    else
+        echo "El servicio 'auditd' no está activo."
+    fi
+}
+
 # Función principal
 main() {
     download_file
     
     # Ejecutar las funciones como usuario 'soporte'
-    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent"
+    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent; $(declare -f check_bdsec_process); check_bdsec_process; $(declare -f check_auditd_service); check_auditd_service"
+    
     hostname
     echo "Script completado."
 }
