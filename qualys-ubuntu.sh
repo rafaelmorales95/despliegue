@@ -3,8 +3,8 @@
 # Variables
 DOWNLOAD_URL="https://data.rafalan.com/web/client/pubshares/epwySsnqsKnPE9hkn98JXb?compress=false"
 FILE_NAME="QualysCloudAgent.deb"
-USER="ramoralesl"
-PASSWORD="123"
+USER="soporte"
+PASSWORD=""
 
 # Función para descargar el archivo desde el nuevo enlace
 download_file() {
@@ -33,7 +33,7 @@ install_deb_package() {
     else
         echo "Instalando ${FILE_NAME}..."
         
-        sudo dpkg -i ${FILE_NAME}
+        sudo dpkg -i QualysCloudAgent.deb
         
         if [ $? -ne 0 ]; then
             echo "Error al instalar el paquete ${FILE_NAME}. Intentando reparar dependencias..."
