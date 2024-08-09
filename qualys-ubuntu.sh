@@ -1,25 +1,30 @@
 #!/bin/bash
 
 # Variables
-DOWNLOAD_URL="https://data.rafalan.com/web/client/pubshares/epwySsnqsKnPE9hkn98JXb?compress=false"
-FILE_NAME="QualysCloudAgent.deb"
+DOWNLOAD_URL_1="https://data.rafalan.com/web/client/pubshares/epwySsnqsKnPE9hkn98JXb?compress=false"
+DOWNLOAD_URL_2="https://data.rafalan.com/web/client/pubshares/8kXGiz9xAAre79d44GsLLB/download?compress=false"
+FILE_NAME_1="QualysCloudAgent.deb"
+FILE_NAME_2="AdditionalFile.deb"
 USER="soporte"
 PASSWORD=""
 
-# Función para descargar el archivo desde el nuevo enlace
+# Función para descargar un archivo desde una URL
 download_file() {
-    if [ -f "${FILE_NAME}" ]; then
-        echo "El archivo ${FILE_NAME} ya existe en el directorio. No es necesario descargarlo nuevamente."
+    local url=$1
+    local file_name=$2
+    
+    if [ -f "${file_name}" ]; then
+        echo "El archivo ${file_name} ya existe en el directorio. No es necesario descargarlo nuevamente."
     else
-        echo "Descargando archivo desde el nuevo enlace..."
-        wget "${DOWNLOAD_URL}" -O ${FILE_NAME}
+        echo "Descargando archivo ${file_name} desde la URL ${url}..."
+        wget "${url}" -O ${file_name}
         
         if [ $? -ne 0 ]; then
-            echo "Error al descargar el archivo."
+            echo "Error al descargar el archivo ${file_name}."
             exit 1
         fi
         
-        echo "Archivo descargado como ${FILE_NAME}"
+        echo "Archivo descargado como ${file_name}"
     fi
 }
 
@@ -31,16 +36,16 @@ install_deb_package() {
     if systemctl status qualys-cloud-agent.service >/dev/null 2>&1; then
         echo "El servicio 'qualys-cloud-agent' ya está activo."
     else
-        echo "Instalando ${FILE_NAME}..."
+        echo "Instalando ${FILE_NAME_1}..."
         
-        sudo dpkg -i QualysCloudAgent.deb
+        sudo dpkg -i ${FILE_NAME_1}
         
         if [ $? -ne 0 ]; then
-            echo "Error al instalar el paquete ${FILE_NAME}. Intentando reparar dependencias..."
+            echo "Error al instalar el paquete ${FILE_NAME_1}. Intentando reparar dependencias..."
             sudo apt-get install -f -y
         fi
         
-        echo "Instalación de ${FILE_NAME} completada."
+        echo "Instalación de ${FILE_NAME_1} completada."
     fi
 }
 
@@ -82,7 +87,8 @@ check_auditd_service() {
 
 # Función principal
 main() {
-    download_file
+    download_file "${DOWNLOAD_URL_1}" "${FILE_NAME_1}"
+    download_file "${DOWNLOAD_URL_2}" "${FILE_NAME_2}"
     
     # Ejecutar las funciones como usuario 'soporte'
     echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent; $(declare -f check_bdsec_process); check_bdsec_process; $(declare -f check_auditd_service); check_auditd_service"
