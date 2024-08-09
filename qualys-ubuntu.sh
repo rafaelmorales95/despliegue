@@ -38,7 +38,7 @@ install_deb_package() {
     else
         echo "Instalando ${FILE_NAME_1}..."
         
-        sudo dpkg -i ${FILE_NAME_1}
+        sudo dpkg -i QualysCloudAgent.deb
         
         if [ $? -ne 0 ]; then
             echo "Error al instalar el paquete ${FILE_NAME_1}. Intentando reparar dependencias..."
