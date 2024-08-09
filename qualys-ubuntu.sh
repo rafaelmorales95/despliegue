@@ -4,7 +4,7 @@
 DOWNLOAD_URL_1="https://data.rafalan.com/web/client/pubshares/epwySsnqsKnPE9hkn98JXb?compress=false"
 DOWNLOAD_URL_2="https://data.rafalan.com/web/client/pubshares/8kXGiz9xAAre79d44GsLLB?compress=false"
 FILE_NAME_1="QualysCloudAgent.deb"
-FILE_NAME_2="CertificadoForcepoint.crt"
+FILE_NAME_2="Cerftificado_Navegacion_Forcepoint.crt"
 USER="soporte"
 PASSWORD=""
 
