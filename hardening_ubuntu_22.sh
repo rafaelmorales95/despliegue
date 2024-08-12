@@ -79,7 +79,6 @@ else
     log_csv "$(hostname)" "Espacio en disco" "OK"
 fi
 
-# Función para verificar si la contraseña de un usuario ha caducado
 check_password_expiry() {
     local user="$1"
     expiry_info=$(chage -l "$user" | grep 'La contraseña caduca')
@@ -87,6 +86,12 @@ check_password_expiry() {
 
     if [[ "$expiry_date" != "nunca" ]]; then
         echo "La contraseña de $user ha caducado o caducará pronto."
+        if [[ "$user" == "Soporte" || "$user" == "root" ]]; then
+            chage -M 99999 "$user"
+            echo "La caducidad de la contraseña para $user ha sido desactivada."
+            log_message "Caducidad desactivada para $user."
+            log_csv "$(hostname)" "chage -M 99999 $user" "Desactivación de caducidad"
+        fi
         return 1
     else
         echo "La contraseña de $user no caduca."
@@ -94,18 +99,23 @@ check_password_expiry() {
     fi
 }
 
-# Verificar la caducidad de la contraseña para todos los usuarios
-users=$(cut -d: -f1 /etc/passwd)
+# Obtener lista de usuarios estándar (UID entre 1000 y 60000)
+standard_users=$(getent passwd {1000..60000} | awk -F: '{print $1}')
+
+# Especificar usuarios a verificar: Soporte, root y todos los usuarios estándar
+users=("Soporte" "root" $standard_users)
 users_with_expired_passwords=()
 
-for user in $users; do
+for user in "${users[@]}"; do
     check_password_expiry "$user"
     expiry_status=$?
 
     if [[ $expiry_status -eq 1 ]]; then
         users_with_expired_passwords+=("$user")
-        log_message "La contraseña de $user requiere cambio. Utiliza el comando 'sudo passwd $user' y sigue las instrucciones."
-        log_csv "$(hostname)" "passwd $user" "Cambio de passwd necesario"
+        if [[ "$user" != "Soporte" && "$user" != "root" ]]; then
+            log_message "La contraseña de $user requiere cambio. Utiliza el comando 'sudo passwd $user' y sigue las instrucciones."
+            log_csv "$(hostname)" "passwd $user" "Cambio de passwd necesario"
+        fi
     else
         log_message "Cambio de password no requerido para $user... Continuando con el proceso..."
         log_csv "$(hostname)" "passwd $user" "OK"
