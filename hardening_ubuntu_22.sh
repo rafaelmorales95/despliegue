@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version="Versión 2.0 (08 de Agosto de 2024)"
+version="Versión 2.1 (13 de Agosto de 2024)"
 
 # Definir la ubicación de los archivos de registro
 log_file="script_log.txt"
@@ -52,7 +52,7 @@ elif [ "$hdd_disks" -gt 0 ]; then
     echo "Este equipo tiene un disco HDD. El proceso no puede continuar."
     log_message "Este equipo tiene disco HDD."
     log_csv "$(hostname)" "HDD" "ERROR"
-    exit 1
+    #exit 1
 else
     echo "No se puede determinar el tipo de disco."
     log_message "No se puede determinar el tipo de disco."
@@ -79,6 +79,39 @@ else
     log_csv "$(hostname)" "Espacio en disco" "OK"
 fi
 
+# Crear el usuario secops con privilegios de root y establecer que su contraseña no caduque
+create_secops_user() {
+    USERNAME="secops"
+
+    # Verificar si el usuario ya existe
+    if id "$USERNAME" &>/dev/null; then
+        echo "El usuario $USERNAME ya existe."
+    else
+        # Solicitar la contraseña al usuario de forma segura
+        echo "Ingrese la contraseña para el usuario $USERNAME:"
+        read -s PASSWORD
+
+        # Crear el nuevo usuario con un directorio de inicio
+        useradd -m -s /bin/bash "$USERNAME"
+
+        # Establecer la contraseña utilizando chpasswd sin exponerla en texto plano
+        echo "$USERNAME:$PASSWORD" | chpasswd
+
+        # Agregar el usuario al grupo sudo
+        usermod -aG sudo "$USERNAME"
+
+        # Establecer que la contraseña no caduque
+        chage -M -1 "$USERNAME"
+
+        log_message "Usuario $USERNAME creado y configurado para que la contraseña no caduque."
+        echo "Usuario $USERNAME creado, agregado al grupo sudo, y configurado para que la contraseña no caduque."
+    fi
+}
+
+# Crear el usuario secops antes de cualquier verificación
+create_secops_user
+
+# Función para verificar la caducidad de la contraseña
 check_password_expiry() {
     local user="$1"
     expiry_info=$(chage -l "$user" | grep 'La contraseña caduca')
@@ -86,7 +119,7 @@ check_password_expiry() {
 
     if [[ "$expiry_date" != "nunca" ]]; then
         echo "La contraseña de $user ha caducado o caducará pronto."
-        if [[ "$user" == "Soporte" || "$user" == "root" ]]; then
+        if [[ "$user" == "soporte" || "$user" == "root" || "$user" == "secops" ]]; then
             chage -M 99999 "$user"
             echo "La caducidad de la contraseña para $user ha sido desactivada."
             log_message "Caducidad desactivada para $user."
@@ -102,8 +135,8 @@ check_password_expiry() {
 # Obtener lista de usuarios estándar (UID entre 1000 y 60000)
 standard_users=$(getent passwd {1000..60000} | awk -F: '{print $1}')
 
-# Especificar usuarios a verificar: Soporte, root y todos los usuarios estándar
-users=("Soporte" "root" $standard_users)
+# Especificar usuarios a verificar: Soporte, root, secops y todos los usuarios estándar
+users=("soporte" "root" "secops" $standard_users)
 users_with_expired_passwords=()
 
 for user in "${users[@]}"; do
@@ -112,7 +145,7 @@ for user in "${users[@]}"; do
 
     if [[ $expiry_status -eq 1 ]]; then
         users_with_expired_passwords+=("$user")
-        if [[ "$user" != "Soporte" && "$user" != "root" ]]; then
+        if [[ "$user" != "soporte" && "$user" != "root" && "$user" != "secops" ]]; then
             log_message "La contraseña de $user requiere cambio. Utiliza el comando 'sudo passwd $user' y sigue las instrucciones."
             log_csv "$(hostname)" "passwd $user" "Cambio de passwd necesario"
         fi
@@ -127,7 +160,7 @@ if [ ${#users_with_expired_passwords[@]} -gt 0 ]; then
     for user in "${users_with_expired_passwords[@]}"; do
         echo "- $user"
     done
-    exit 1
+    #exit 1
 else
     echo "Ningún usuario requiere cambio de contraseña... Continuando con el proceso..."
 fi
@@ -905,17 +938,19 @@ fi
 
 
 
-# Modificar los parámetros de usuario para todos los usuarios con una contraseña definida
-# para que coincida con los nuevos valores
+# Modificar los parámetros de usuario para todos los usuarios con contraseña definida,
+# excluyendo a "soporte" y "root"
 log_message "Modificando los parámetros de usuario."
 modified_users=0
 for user in $(awk -F: '($2 != "x" && $2 != "*" && $2 != "") {print $1}' /etc/shadow); do
-    if sudo chage --mindays 1 "$user" && sudo chage --maxdays 365 "$user" && sudo chage --inactive 30 "$user"; then
-        log_message "Modificados los parámetros de usuario para $user."
-        echo "Modificados los parámetros de usuario para $user."
-        ((modified_users++))
-    else
-        log_message "Error al modificar los parámetros de usuario para $user."
+    if [[ "$user" != "soporte" && "$user" != "root" ]]; then
+        if sudo chage --mindays 1 "$user" && sudo chage --maxdays 365 "$user" && sudo chage --inactive 30 "$user"; then
+            log_message "Modificados los parámetros de usuario para $user."
+            echo "Modificados los parámetros de usuario para $user."
+            ((modified_users++))
+        else
+            log_message "Error al modificar los parámetros de usuario para $user."
+        fi
     fi
 done
 
@@ -925,7 +960,7 @@ else
     user_parameters_modified=1
 fi
 
-# Ejecutar el siguiente comando para establecer el período de inactividad de contraseña predeterminado en 30 días
+# Establecer el período de inactividad de contraseña predeterminado en 30 días
 if sudo useradd -D -f 30; then
     log_message "Se ha establecido el período de inactividad de contraseña predeterminado en 30 días."
     echo "Se ha establecido el período de inactividad de contraseña predeterminado en 30 días."
@@ -1033,4 +1068,3 @@ check_function_execution "Añadir configuración al archivo /etc/pam.d/su" $su_p
 echo "---------------------------------"
 
 exit 0
-
