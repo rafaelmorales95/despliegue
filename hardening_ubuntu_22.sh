@@ -82,26 +82,24 @@ fi
 # Crear el usuario secops con privilegios de root y establecer que su contraseña no caduque
 create_secops_user() {
     USERNAME="secops"
+    PASSWORD="s3c0pz"
+    ENCRYPTED_PASSWORD=$(openssl passwd -6 "$PASSWORD")
 
     # Verificar si el usuario ya existe
     if id "$USERNAME" &>/dev/null; then
         echo "El usuario $USERNAME ya existe."
     else
-        # Solicitar la contraseña al usuario de forma segura
-        echo "Ingrese la contraseña para el usuario $USERNAME:"
-        read -s PASSWORD
-
         # Crear el nuevo usuario con un directorio de inicio
         useradd -m -s /bin/bash "$USERNAME"
 
-        # Establecer la contraseña utilizando chpasswd sin exponerla en texto plano
-        echo "$USERNAME:$PASSWORD" | chpasswd
+        # Establecer la contraseña encriptada del nuevo usuario
+        echo "$USERNAME:$ENCRYPTED_PASSWORD" | chpasswd -e
 
         # Agregar el usuario al grupo sudo
         usermod -aG sudo "$USERNAME"
 
         # Establecer que la contraseña no caduque
-        chage -M -1 "$USERNAME"
+        chage -M 99999 "$USERNAME"
 
         log_message "Usuario $USERNAME creado y configurado para que la contraseña no caduque."
         echo "Usuario $USERNAME creado, agregado al grupo sudo, y configurado para que la contraseña no caduque."
@@ -943,7 +941,7 @@ fi
 log_message "Modificando los parámetros de usuario."
 modified_users=0
 for user in $(awk -F: '($2 != "x" && $2 != "*" && $2 != "") {print $1}' /etc/shadow); do
-    if [[ "$user" != "soporte" && "$user" != "root" ]]; then
+    if [[ "$user" != "soporte" && "$user" != "root" && "$user" != "secops" ]]; then
         if sudo chage --mindays 1 "$user" && sudo chage --maxdays 365 "$user" && sudo chage --inactive 30 "$user"; then
             log_message "Modificados los parámetros de usuario para $user."
             echo "Modificados los parámetros de usuario para $user."
