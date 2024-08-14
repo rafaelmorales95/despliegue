@@ -38,6 +38,12 @@ print_error() {
     echo -e "\033[1;31m$1\033[0m"  # Cambia el color del texto a rojo
 }
 
+# Imprimir el número de versión y la fecha de liberación al ejecutar el script
+echo "Número de versión: $version"
+log_message "Hardening Ubuntu v2.1"
+log_csv "$(hostname)" "$version" "OK"
+
+
 # Verificar si hay discos NVMe
 nvme_disks=$(ls /dev/nvme* 2>/dev/null | wc -l)
 
