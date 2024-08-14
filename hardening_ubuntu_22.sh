@@ -502,6 +502,9 @@ else
     log_message "Error al implementar la política de denegación predeterminada."
     ufw_policy=0
 fi
+<<-COMMENT
+
+#Se desactivo Auditd porque genera uso excesivo de procesador v2.1
 
 # Verificar si auditd ya está instalado
 if dpkg -s auditd > /dev/null 2>&1; then
@@ -532,7 +535,7 @@ else
         auditd_enable=0
     fi
 fi
-
+COMMENT
 
 # Verificar si GRUB está instalado
 if ! command -v grub-mkconfig >/dev/null; then
@@ -619,6 +622,7 @@ verify_and_create_audit_rules_files "/etc/audit/rules.d/50-scope.rules" "
 -w /etc/sudoers -p wa -k scope
 -w /etc/sudoers.d/ -p wa -k scope"
 
+<<-COMMENT
 # Ajustando los parámetros en /etc/audit/auditd.conf si no existen
 echo "Editando /etc/audit/auditd.conf para ajustar los parámetros si es necesario..."
 if ! sudo grep -qE '^max_log_file\s*=\s*6' /etc/audit/auditd.conf; then
@@ -632,7 +636,7 @@ if ! sudo grep -qE '^max_log_file_action\s*=\s*keep_logs' /etc/audit/auditd.conf
 fi
 
 log_message "Los parámetros en /etc/audit/auditd.conf han sido ajustados según la política del sitio."
-
+COMMENT
 
 
 # Añadir reglas de auditoría para los archivos de inicio de sesión
