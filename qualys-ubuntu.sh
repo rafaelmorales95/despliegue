@@ -140,6 +140,7 @@ main() {
     list_grub_users_with_password
     
     hostname
+    check_bdsec_process
     echo "Script completado."
 }
 
