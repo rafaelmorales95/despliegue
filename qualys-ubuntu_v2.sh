@@ -115,13 +115,17 @@ check_grub_password() {
     fi
 }
 
-# Función para enumerar usuarios con contraseña
-list_users_with_password() {
-    echo "Enumerando usuarios con contraseña configurada..."
-    
-    # Los usuarios que tienen contraseña configurada tendrán algo distinto a "!" o "*" en el campo de contraseña
-    awk -F: '($2 != "!" && $2 != "*") {print $1}' /etc/shadow
+list_grub_users_with_password() {
+    echo "Enumerando usuarios con contraseña configurada en GRUB..."
+
+    # Buscar líneas que contengan la palabra 'password' en /etc/grub.d/40_custom y extraer los nombres de usuario
+    if grep -q "password" /etc/grub.d/40_custom; then
+        grep "password" /etc/grub.d/40_custom | awk '{print $2}' | sort | uniq
+    else
+        echo "No se encontraron usuarios con contraseñas configuradas en GRUB."
+    fi
 }
+
 
 # Función principal
 main() {
@@ -133,7 +137,7 @@ main() {
     
     # Verificar la contraseña del GRUB y listar los usuarios con contraseña
     check_grub_password
-    list_users_with_password
+    list_grub_users_with_password
     
     hostname
     echo "Script completado."
