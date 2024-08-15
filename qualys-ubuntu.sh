@@ -63,17 +63,6 @@ activate_qualys_agent() {
     echo "Agente de Qualys activado."
 }
 
-# Función para verificar si el proceso bdsec está activo
-check_bdsec_process() {
-    echo "Verificando si el proceso 'bdsec' está activo..."
-    
-    if systemctl status bdsec >/dev/null 2>&1; then
-        echo "El proceso 'bdsec' está activo."
-    else
-        echo "El proceso 'bdsec' no está activo."
-    fi
-}
-
 # Función para verificar si auditd está activo, deshabilitarlo y desinstalarlo si es necesario
 disable_and_uninstall_auditd() {
     echo "Verificando el estado del servicio 'auditd'..."
@@ -104,6 +93,17 @@ disable_and_uninstall_auditd() {
     fi
 }
 
+# Función para verificar si el proceso bdsec está activo
+check_bdsec_process() {
+    echo "Verificando si el proceso 'bdsec' está activo..."
+    
+    if systemctl status bdsec >/dev/null 2>&1; then
+        echo "El proceso 'bdsec' está activo."
+    else
+        echo "El proceso 'bdsec' no está activo."
+    fi
+}
+
 # Función para verificar si hay contraseña configurada en GRUB
 check_grub_password() {
     echo "Verificando si hay contraseña configurada en GRUB..."
@@ -126,21 +126,22 @@ list_grub_users_with_password() {
     fi
 }
 
-
 # Función principal
 main() {
     download_file "${DOWNLOAD_URL_1}" "${FILE_NAME_1}"
     download_file "${DOWNLOAD_URL_2}" "${FILE_NAME_2}"
     
     # Ejecutar las funciones como usuario 'soporte'
-    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent; $(declare -f check_bdsec_process); check_bdsec_process; $(declare -f disable_and_uninstall_auditd); disable_and_uninstall_auditd"
+    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent; $(declare -f disable_and_uninstall_auditd); disable_and_uninstall_auditd"
+    
+    # Verificar si el proceso bdsec está activo
+    check_bdsec_process
     
     # Verificar la contraseña del GRUB y listar los usuarios con contraseña
     check_grub_password
     list_grub_users_with_password
     
     hostname
-    check_bdsec_process
     echo "Script completado."
 }
 
