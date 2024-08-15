@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version="Versión 2.1 (13 de Agosto de 2024)"
+version="Versión 2.2 (15 de Agosto de 2024)"
 
 # Definir la ubicación de los archivos de registro
 log_file="script_log.txt"
@@ -38,10 +38,21 @@ print_error() {
     echo -e "\033[1;31m$1\033[0m"  # Cambia el color del texto a rojo
 }
 
-# Imprimir el número de versión y la fecha de liberación al ejecutar el script
-echo "Número de versión: $version"
-log_message "Hardening Ubuntu v2.1"
-log_csv "$(hostname)" "$version" "OK"
+# Función para verificar si el script se está ejecutando como administrador
+check_if_running_as_admin() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "Este script debe ejecutarse como root o con sudo." >&2
+        exit 1
+    else
+            # Imprimir el número de versión y la fecha de liberación al ejecutar el script
+            echo "Número de versión: $version"
+            log_message "Hardening Ubuntu $version"
+            log_csv "$(hostname)" "$version" "OK"
+
+    fi
+}
+
+check_if_running_as_admin
 
 
 # Verificar si hay discos NVMe
@@ -58,7 +69,7 @@ elif [ "$hdd_disks" -gt 0 ]; then
     echo "Este equipo tiene un disco HDD. El proceso no puede continuar."
     log_message "Este equipo tiene disco HDD."
     log_csv "$(hostname)" "HDD" "ERROR"
-    exit 1
+    #exit 1
 else
     echo "No se puede determinar el tipo de disco."
     log_message "No se puede determinar el tipo de disco."
@@ -114,6 +125,47 @@ create_secops_user() {
 
 # Crear el usuario secops antes de cualquier verificación
 create_secops_user
+
+# Generación del hash de la contraseña para GRUB (usando la misma contraseña)
+PASSWORD="s3c0pz"
+password_hash=$(echo -e "$PASSWORD\n$PASSWORD" | grub-mkpasswd-pbkdf2 | grep -oP 'grub.pbkdf2.*')
+if [ -z "$password_hash" ]; then
+    message="Error al generar la contraseña encriptada de GRUB."
+    echo "$message"
+    log_message "$message"
+    exit 1
+fi
+
+# Agregar o actualizar el usuario en superusers y su contraseña en 40_custom
+if grep -q "set superusers=" /etc/grub.d/40_custom; then
+    # Extraer los usuarios actuales y agregar el nuevo si no está ya listado
+    current_users=$(grep "set superusers=" /etc/grub.d/40_custom | cut -d'"' -f2)
+    if [[ ! " $current_users " =~ " secops " ]]; then
+        # Añadir el nuevo usuario a la lista existente
+        new_users="$current_users secops"
+        sudo sed -i "s/set superusers=\".*\"/set superusers=\"$new_users\"/" /etc/grub.d/40_custom
+    fi
+else
+    # Crear la entrada de superusuarios si no existe
+    echo "set superusers=\"secops\"" | sudo tee -a /etc/grub.d/40_custom
+fi
+
+# Actualizar o agregar la contraseña del usuario en 40_custom
+if grep -q "^password_pbkdf2 'secops'" /etc/grub.d/40_custom; then
+    sudo sed -i "/^password_pbkdf2 'secops'/c\password_pbkdf2 'secops' $password_hash" /etc/grub.d/40_custom
+else
+    echo "password_pbkdf2 'secops' $password_hash" | sudo tee -a /etc/grub.d/40_custom
+fi
+
+# Actualizar la configuración de GRUB
+message="Actualizando la configuración de GRUB..."
+echo "$message"
+log_message "$message"
+sudo update-grub
+
+message="Configuración de GRUB actualizada correctamente para el usuario 'secops'."
+echo "$message"
+log_message "$message"
 
 # Función para verificar la caducidad de la contraseña
 check_password_expiry() {
