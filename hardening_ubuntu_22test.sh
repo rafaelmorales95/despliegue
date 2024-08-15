@@ -52,6 +52,7 @@ check_if_running_as_admin() {
     fi
 }
 
+check_if_running_as_admin
 
 
 # Verificar si hay discos NVMe
