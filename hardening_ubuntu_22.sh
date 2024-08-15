@@ -69,7 +69,7 @@ elif [ "$hdd_disks" -gt 0 ]; then
     echo "Este equipo tiene un disco HDD. El proceso no puede continuar."
     log_message "Este equipo tiene disco HDD."
     log_csv "$(hostname)" "HDD" "ERROR"
-    #exit 1
+    exit 1
 else
     echo "No se puede determinar el tipo de disco."
     log_message "No se puede determinar el tipo de disco."
