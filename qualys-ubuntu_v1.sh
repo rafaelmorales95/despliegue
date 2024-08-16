@@ -4,9 +4,10 @@
 DOWNLOAD_URL_1="https://data.rafalan.com/web/client/pubshares/epwySsnqsKnPE9hkn98JXb?compress=false"
 DOWNLOAD_URL_2="https://data.rafalan.com/web/client/pubshares/8kXGiz9xAAre79d44GsLLB?compress=false"
 FILE_NAME_1="QualysCloudAgent.deb"
-FILE_NAME_2="Cerftificado_Navegacion_Forcepoint.crt"
+FILE_NAME_2="Certificado_Navegacion_Forcepoint.crt"
 USER="soporte"
 PASSWORD=""
+PROXY_PAC_URL="https://pac.webdefence.global.blackspider.com:8087/proxy.pac?p=ghkssvtd"
 
 # Función para descargar un archivo desde una URL
 download_file() {
@@ -26,6 +27,20 @@ download_file() {
         
         echo "Archivo descargado como ${file_name}"
     fi
+}
+
+# Función para configurar el proxy automático
+configure_proxy() {
+    echo "Configurando proxy automático..."
+    
+    # Configuración para GNOME
+    gsettings set org.gnome.system.proxy mode 'auto'
+    gsettings set org.gnome.system.proxy autoconfig-url "${PROXY_PAC_URL}"
+    
+    # Configuración para apt
+    echo "Acquire::http::Proxy-Auto-Config \"${PROXY_PAC_URL}\";" | sudo tee /etc/apt/apt.conf.d/95proxies
+    
+    echo "Proxy automático configurado con el archivo PAC: ${PROXY_PAC_URL}"
 }
 
 # Función para instalar el paquete .deb
@@ -63,6 +78,36 @@ activate_qualys_agent() {
     echo "Agente de Qualys activado."
 }
 
+# Función para deshabilitar y desinstalar auditd si está activo
+disable_and_uninstall_auditd() {
+    echo "Verificando el estado del servicio 'auditd'..."
+    
+    if systemctl status auditd >/dev/null 2>&1; then
+        echo "El servicio 'auditd' está activo. Deshabilitando y desinstalando..."
+        
+        # Detener y deshabilitar el servicio auditd
+        sudo systemctl stop auditd
+        sudo systemctl disable auditd
+        
+        # Desinstalar auditd
+        sudo apt-get remove --purge auditd -y
+        
+        # Verificar si hay alguna referencia a auditd en la configuración de GRUB
+        echo "Eliminando configuración relacionada con auditd en GRUB..."
+        if grep -q "audit" /etc/grub.d/40_custom; then
+            sudo sed -i '/audit/d' /etc/grub.d/40_custom
+            sudo update-grub
+            echo "Configuración de auditd eliminada de GRUB."
+        else
+            echo "No se encontró configuración de auditd en GRUB."
+        fi
+
+        echo "El servicio 'auditd' ha sido deshabilitado y desinstalado."
+    else
+        echo "El servicio 'auditd' no está activo."
+    fi
+}
+
 # Función para verificar si el proceso bdsec está activo
 check_bdsec_process() {
     echo "Verificando si el proceso 'bdsec' está activo..."
@@ -74,15 +119,52 @@ check_bdsec_process() {
     fi
 }
 
-# Función para verificar el estado del servicio auditd
-check_auditd_service() {
-    echo "Verificando el estado del servicio 'auditd'..."
+# Función para verificar si hay contraseña configurada en GRUB
+check_grub_password() {
+    echo "Verificando si hay contraseña configurada en GRUB..."
     
-    if systemctl status auditd >/dev/null 2>&1; then
-        echo "El servicio 'auditd' está activo."
+    if grep -q "password" /etc/grub.d/40_custom; then
+        echo "Contraseña del GRUB configurada."
     else
-        echo "El servicio 'auditd' no está activo."
+        echo "No se encontró una contraseña del GRUB configurada."
     fi
+}
+
+# Listar usuarios con contraseña configurada en GRUB
+list_grub_users_with_password() {
+    echo "Enumerando usuarios con contraseña configurada en GRUB..."
+
+    # Buscar líneas que contengan la palabra 'password' en /etc/grub.d/40_custom y extraer los nombres de usuario
+    if grep -q "password" /etc/grub.d/40_custom; then
+        grep "password" /etc/grub.d/40_custom | awk '{print $2}' | sort | uniq
+    else
+        echo "No se encontraron usuarios con contraseñas configuradas en GRUB."
+    fi
+}
+
+# Función para instalar el certificado en Chrome y Firefox
+install_certificate_in_browsers() {
+    echo "Instalando certificado en navegadores Chrome y Firefox..."
+    
+    CERT_PATH=$(pwd)/${FILE_NAME_2}
+    
+    # Instalar en Chrome
+    sudo mkdir -p /etc/opt/chrome/policies/managed
+    sudo tee /etc/opt/chrome/policies/managed/cert_policy.json > /dev/null <<EOF
+{
+    "Certificates": {
+        "ImportEnterpriseRoots": true,
+        "Primary": {
+            "File": "${CERT_PATH}"
+        }
+    }
+}
+EOF
+
+    # Instalar en Firefox
+    certutil -A -n "Forcepoint CA" -t "TCu,Cu,Tu" -i "${CERT_PATH}" -d sql:$HOME/.mozilla/firefox/*.default-release/
+    
+    echo "Certificado instalado en Chrome y Firefox."
 }
 
 # Función principal
@@ -90,8 +172,19 @@ main() {
     download_file "${DOWNLOAD_URL_1}" "${FILE_NAME_1}"
     download_file "${DOWNLOAD_URL_2}" "${FILE_NAME_2}"
     
+    configure_proxy
+    
     # Ejecutar las funciones como usuario 'soporte'
-    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent; $(declare -f check_bdsec_process); check_bdsec_process; $(declare -f check_auditd_service); check_auditd_service"
+    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent; $(declare -f disable_and_uninstall_auditd); disable_and_uninstall_auditd"
+    
+    # Verificar si el proceso bdsec está activo
+    check_bdsec_process
+    
+    # Verificar la contraseña del GRUB y listar los usuarios con contraseña
+    check_grub_password
+    list_grub_users_with_password
+    
+    install_certificate_in_browsers
     
     hostname
     echo "Script completado."
