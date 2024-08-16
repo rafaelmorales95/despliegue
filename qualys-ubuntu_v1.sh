@@ -32,16 +32,17 @@ download_file() {
 # Función para configurar el proxy automático
 configure_proxy() {
     echo "Configurando proxy automático..."
-    
-    # Configuración para GNOME
-    gsettings set org.gnome.system.proxy mode 'auto'
-    gsettings set org.gnome.system.proxy autoconfig-url "${PROXY_PAC_URL}"
+
+    # Configuración para GNOME usando dconf
+    dconf write /system/proxy/mode "'auto'"
+    dconf write /system/proxy/autoconfig-url "'${PROXY_PAC_URL}'"
     
     # Configuración para apt
     echo "Acquire::http::Proxy-Auto-Config \"${PROXY_PAC_URL}\";" | sudo tee /etc/apt/apt.conf.d/95proxies
     
     echo "Proxy automático configurado con el archivo PAC: ${PROXY_PAC_URL}"
 }
+
 
 # Función para instalar el paquete .deb
 install_deb_package() {
