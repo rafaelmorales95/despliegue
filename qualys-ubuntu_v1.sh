@@ -4,10 +4,20 @@
 DOWNLOAD_URL_1="https://data.rafalan.com/web/client/pubshares/epwySsnqsKnPE9hkn98JXb?compress=false"
 DOWNLOAD_URL_2="https://data.rafalan.com/web/client/pubshares/8kXGiz9xAAre79d44GsLLB?compress=false"
 FILE_NAME_1="QualysCloudAgent.deb"
-FILE_NAME_2="Cerftificado_Navegacion_Forcepoint.crt"
+FILE_NAME_2="Certificado_Navegacion_Forcepoint.crt"
 USER="soporte"
 PASSWORD=""
 PROXY_PAC_URL="https://pac.webdefence.global.blackspider.com:8087/proxy.pac?p=ghkssvtd"
+
+# Función para instalar libnss3-tools si no está presente
+install_nss_tools() {
+    echo "Verificando e instalando libnss3-tools..."
+    
+    if ! command -v certutil >/dev/null 2>&1; then
+        echo "certutil no encontrado. Instalando libnss3-tools..."
+        sudo apt-get install -y libnss3-tools
+    fi
+}
 
 # Función para descargar un archivo desde una URL
 download_file() {
@@ -127,13 +137,13 @@ list_grub_users_with_password() {
     fi
 }
 
-# Función para configurar el proxy automático
+# Función para configurar el proxy automático usando el entorno del usuario
 configure_proxy() {
     echo "Configurando proxy automático..."
 
-    # Configuración de proxy en GNOME utilizando gsettings
-    gsettings set org.gnome.system.proxy mode 'auto'
-    gsettings set org.gnome.system.proxy autoconfig-url "${PROXY_PAC_URL}"
+    # Ejecutar los comandos gsettings como el usuario actual
+    su -c "gsettings set org.gnome.system.proxy mode 'auto'" ${USER}
+    su -c "gsettings set org.gnome.system.proxy autoconfig-url '${PROXY_PAC_URL}'" ${USER}
     
     echo "Proxy automático configurado con el archivo PAC: ${PROXY_PAC_URL}"
 }
@@ -142,14 +152,15 @@ configure_proxy() {
 install_certificate_browser() {
     echo "Instalando certificado en navegadores Chrome y Firefox..."
 
+    # Instalar libnss3-tools si no está presente
+    install_nss_tools
+
     # Chrome
-    certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "Forcepoint" -i "${FILE_NAME_2}"
-
-    # Firefox
-    certutil -d sql:$HOME/.mozilla/firefox/*.default-release -A -t "C,," -n "Forcepoint" -i "${FILE_NAME_2}"
-
-    echo "Certificado instalado en Chrome y Firefox."
+    certutil -d sql:$HOME/.pki/nssdb -A -t "C,C,C" -n "Forcepoint" -i "${FILE_NAME_2}"
+    echo "Certificado instalado en Chrome."
 }
+
+
 
 # Función principal
 main() {
@@ -166,7 +177,7 @@ main() {
     check_grub_password
     list_grub_users_with_password
     
-    # Configurar proxy automático
+    # Configurar proxy automático (se ejecuta como usuario)
     configure_proxy
 
     # Instalar certificado en navegadores
