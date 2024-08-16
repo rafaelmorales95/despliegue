@@ -158,9 +158,16 @@ install_certificate_browser() {
     # Chrome
     certutil -d sql:$HOME/.pki/nssdb -A -t "C,C,C" -n "Forcepoint" -i "${FILE_NAME_2}"
     echo "Certificado instalado en Chrome."
+
+    # Firefox
+    local firefox_profile_dir=$(find $HOME/.mozilla/firefox -type d -name "*.default-release" | head -n 1)
+    if [ -n "$firefox_profile_dir" ]; then
+        certutil -d sql:$firefox_profile_dir -A -t "C,C,C" -n "Forcepoint" -i "${FILE_NAME_2}"
+        echo "Certificado instalado en Firefox."
+    else
+        echo "No se encontró el directorio del perfil de Firefox."
+    fi
 }
-
-
 
 # Función principal
 main() {
