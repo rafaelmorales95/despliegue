@@ -4,7 +4,7 @@
 DOWNLOAD_URL_1="https://data.rafalan.com/web/client/pubshares/epwySsnqsKnPE9hkn98JXb?compress=false"
 DOWNLOAD_URL_2="https://data.rafalan.com/web/client/pubshares/8kXGiz9xAAre79d44GsLLB?compress=false"
 FILE_NAME_1="QualysCloudAgent.deb"
-FILE_NAME_2="Certificado_Navegacion_Forcepoint.crt"
+FILE_NAME_2="Cerftificado_Navegacion_Forcepoint.crt"
 USER="soporte"
 PASSWORD=""
 PROXY_PAC_URL="https://pac.webdefence.global.blackspider.com:8087/proxy.pac?p=ghkssvtd"
@@ -28,21 +28,6 @@ download_file() {
         echo "Archivo descargado como ${file_name}"
     fi
 }
-
-# Función para configurar el proxy automático
-configure_proxy() {
-    echo "Configurando proxy automático..."
-
-    # Configuración para GNOME usando dconf
-    dconf write /system/proxy/mode "'auto'"
-    dconf write /system/proxy/autoconfig-url "'${PROXY_PAC_URL}'"
-    
-    # Configuración para apt
-    echo "Acquire::http::Proxy-Auto-Config \"${PROXY_PAC_URL}\";" | sudo tee /etc/apt/apt.conf.d/95proxies
-    
-    echo "Proxy automático configurado con el archivo PAC: ${PROXY_PAC_URL}"
-}
-
 
 # Función para instalar el paquete .deb
 install_deb_package() {
@@ -79,7 +64,7 @@ activate_qualys_agent() {
     echo "Agente de Qualys activado."
 }
 
-# Función para deshabilitar y desinstalar auditd si está activo
+# Función para verificar si auditd está activo, deshabilitarlo y desinstalarlo si es necesario
 disable_and_uninstall_auditd() {
     echo "Verificando el estado del servicio 'auditd'..."
     
@@ -131,7 +116,6 @@ check_grub_password() {
     fi
 }
 
-# Listar usuarios con contraseña configurada en GRUB
 list_grub_users_with_password() {
     echo "Enumerando usuarios con contraseña configurada en GRUB..."
 
@@ -143,28 +127,27 @@ list_grub_users_with_password() {
     fi
 }
 
-# Función para instalar el certificado en Chrome y Firefox
-install_certificate_in_browsers() {
-    echo "Instalando certificado en navegadores Chrome y Firefox..."
-    
-    CERT_PATH=$(pwd)/${FILE_NAME_2}
-    
-    # Instalar en Chrome
-    sudo mkdir -p /etc/opt/chrome/policies/managed
-    sudo tee /etc/opt/chrome/policies/managed/cert_policy.json > /dev/null <<EOF
-{
-    "Certificates": {
-        "ImportEnterpriseRoots": true,
-        "Primary": {
-            "File": "${CERT_PATH}"
-        }
-    }
-}
-EOF
+# Función para configurar el proxy automático
+configure_proxy() {
+    echo "Configurando proxy automático..."
 
-    # Instalar en Firefox
-    certutil -A -n "Forcepoint CA" -t "TCu,Cu,Tu" -i "${CERT_PATH}" -d sql:$HOME/.mozilla/firefox/*.default-release/
+    # Configuración de proxy en GNOME utilizando gsettings
+    gsettings set org.gnome.system.proxy mode 'auto'
+    gsettings set org.gnome.system.proxy autoconfig-url "${PROXY_PAC_URL}"
     
+    echo "Proxy automático configurado con el archivo PAC: ${PROXY_PAC_URL}"
+}
+
+# Función para instalar el certificado en navegadores
+install_certificate_browser() {
+    echo "Instalando certificado en navegadores Chrome y Firefox..."
+
+    # Chrome
+    certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "Forcepoint" -i "${FILE_NAME_2}"
+
+    # Firefox
+    certutil -d sql:$HOME/.mozilla/firefox/*.default-release -A -t "C,," -n "Forcepoint" -i "${FILE_NAME_2}"
+
     echo "Certificado instalado en Chrome y Firefox."
 }
 
@@ -172,8 +155,6 @@ EOF
 main() {
     download_file "${DOWNLOAD_URL_1}" "${FILE_NAME_1}"
     download_file "${DOWNLOAD_URL_2}" "${FILE_NAME_2}"
-    
-    configure_proxy
     
     # Ejecutar las funciones como usuario 'soporte'
     echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent; $(declare -f disable_and_uninstall_auditd); disable_and_uninstall_auditd"
@@ -185,7 +166,11 @@ main() {
     check_grub_password
     list_grub_users_with_password
     
-    install_certificate_in_browsers
+    # Configurar proxy automático
+    configure_proxy
+
+    # Instalar certificado en navegadores
+    install_certificate_browser
     
     hostname
     echo "Script completado."
