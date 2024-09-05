@@ -3,8 +3,8 @@
 version="Versión 2.2 (15 de Agosto de 2024)"
 
 # Definir la ubicación de los archivos de registro
-log_file="script_log.txt"
-csv_file="script_log.csv"
+log_file="/var/log/hardening_log.log"
+csv_file="/var/log/hardening_log.csv"
 
 # Agregar línea vacía al inicio del archivo de texto
 echo >> "$log_file"
