@@ -1,5 +1,38 @@
 #!/bin/bash
 
+# Variables
+DOWNLOAD_URL="https://data.rafalan.com/web/client/pubshares/8kXGiz9xAAre79d44GsLLB?compress=false"
+FILE_NAME="Cerftificado_Navegacion_Forcepoint.crt"
+
+# Función para descargar un archivo desde una URL
+download_file() {
+    local url=$1
+    local file_name=$2
+    
+    if [ -f "${file_name}" ]; then
+        echo "El archivo ${file_name} ya existe en el directorio. No es necesario descargarlo nuevamente."
+    else
+        echo "Descargando archivo ${file_name} desde la URL ${url}..."
+        wget "${url}" -O ${file_name}
+        
+        if [ $? -ne 0 ]; then
+            echo "Error al descargar el archivo ${file_name}."
+            exit 1
+        fi
+        
+        echo "Archivo descargado como ${file_name}"
+    fi
+}
+
+# Función principal
+main() {
+    download_file "${DOWNLOAD_URL}" "${FILE_NAME}"
+    echo "Descarga completada."
+}
+
+# Ejecutar la función principal
+main
+
 version="Versión 2.2 (15 de Agosto de 2024)"
 
 # Definir la ubicación de los archivos de registro
