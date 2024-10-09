@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variables
-DOWNLOAD_URL="https://data.rafalan.com/web/client/pubshares/8kXGiz9xAAre79d44GsLLB?compress=false"
+DOWNLOAD_URL="https://raw.githubusercontent.com/rafaelmorales95/despliegue/refs/heads/main/Cerftificado_Navegacion_Forcepoint.crt"
 FILE_NAME="Cerftificado_Navegacion_Forcepoint.crt"
 
 # Función para descargar un archivo desde una URL
