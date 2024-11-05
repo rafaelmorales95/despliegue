@@ -6,6 +6,34 @@ import psutil
 import subprocess
 import os
 
+# Función para instalar paquetes si no están ya instalados
+def install_package(package_name):
+    try:
+        subprocess.check_call(f"dpkg -l | grep {package_name}", shell=True)
+        print(f"{package_name} ya está instalado.")
+    except subprocess.CalledProcessError:
+        print(f"Instalando {package_name}...")
+        subprocess.check_call(f"sudo apt update && sudo apt install -y {package_name}", shell=True)
+        print(f"{package_name} instalado correctamente.")
+
+# Instalación de dependencias necesarias
+install_package("python3-pip")
+install_package("clamav")
+install_package("autofs")
+
+# Instalar dependencias de Python si no están presentes
+try:
+    import gspread
+except ImportError:
+    subprocess.check_call("pip3 install gspread google-auth", shell=True)
+    print("gspread y google-auth instalados.")
+
+try:
+    import psutil
+except ImportError:
+    subprocess.check_call("pip3 install psutil", shell=True)
+    print("psutil instalado.")
+
 # Configuración de acceso a Google Sheets
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
 CREDS = Credentials.from_service_account_file("Key.json", scopes=SCOPE)
