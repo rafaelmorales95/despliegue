@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "segt-blueteam",
+  "private_key_id": "973e15e0637ada791898518eda73f96d0f9e8a5e",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCizNOkri/jb84a\nI+ibA0JqdmxsTlcucul927meYt1cVJBOMEc/8vcqxAkhgDbgCuzobq77eL0B6Rg7\nFnFCGVh/wl+p5Ee/UmzrYuNw2/7kfs8IN43+krDDXeWVA4a3OJDaw3TB29PqUytc\nTJm0vPraBFXbbLwSsvHiTOLRyUYKskkmovfBLzn3I7JCFc7MI7H3yx4lMqK8rhrm\no2KXhrIDRpdh1ifBDsR0/QAoyTqVoS233t69o9hA3VmWn37NetovDUFL0DYfe6BT\nfHjwLuh1X/k1PSymSM2YO/zoiz44wGyNysS6L2a1MzR5pvj+9sD2v+7VhdDx6++n\nAQMoF++lAgMBAAECggEAEiqzsmSKrQFYuTOJHSUxt+IjqrlaQrFpi1Ul4z4KkCdS\nnBsIlGMHQGM0VqPxW7J0aeKSDbdVNh2eCdfxBwx/gvA8jx+NfxTSWTkFgt5V1Qcu\nkK7sXjxd08tKV4TXd2ItTfAyOwDOJs+lnszgeRn+jy4dK5l4akjEM7nbNMhWU9KQ\nMwn1j0+5U56AbxwRfQFWPJtVc3p6XW6crrQ7p8UFICMWSiaN8i2JH6HATVO3muFf\n0t5AdrdeGMdhITeNjS/CTXNUmWg0CESAL1jOpul8z//BlJ4CLMRmlKjzbuyCqQQ0\nU6epfsFuMJfFBXJsi8UpFRUHpE5ugG2B9aHxCr+dQQKBgQDYA+WoLZ48tdeWV6Ww\nW09yKVHiZ7dIr1j2neGkRP4aD0F/JiVVxKbWxyCwAVmmEef7zt6PSU5okPecxoJv\ntUltBGpLdJONYDMlvws21GN3je07NnwajM90tivA3nML71DNYBzolkAVLkmthsOo\nUGJ9VyzxNxJRPW486UtIxHL4ZQKBgQDA70bTCW1HhgkZVIvxxZdJ1CRTqfOZagkH\nOBI3TKfE5x8zwZlPoMxzvgUPqdZf49JNyrgi0wB1pD3ZJWWNt2/v2agc8RYV+PGi\nGNcWcyCOdR6fWkw7PzcofJDAgKiE2Fk3IZFcUplbYU0B2jPe3YN5xrkqHbENk4iU\ndzIjajqGQQKBgE9rR2FIvFe3x3aH7Ovk9lWTqX5jAXjgtwWc0FvT3dR47Wyw+qMI\n9QocFgF/zZUIGlFzIlJt8jzxp4flWAl4DnHdYLMzPhiJWOS004uqFJPdA250vrYI\nNTHE1FtJreSibQPFJXvB2fevl/kLhh34x+0rQuPAiqSBwGj2oO41A8wdAoGAcITb\nrEZKKjVcZx5sw2L2GYOUcAqk2+sAOuqTjRaynV4hT2DwFYV012eRshHdyWyngODi\nRMUD9pgDzflGYcECkkJBDif4NnZKDbwo7JnV+d8KLetOnBsBAyaqkOo33coDNejo\nyowNjkKP0627JJXRkJq58HsCgCVzuQpO/mJ8oUECgYAOLp9aU8yYeato2xDLSKnv\n9fPALcLc9XExBb+EHlO2P3kmG1QfuiyivtBWLTj53Pmp2UpQt4EgkAWXbBVVm8jO\nwh1EjQvAD/KgSqsSHkouksxwCsCoRTiGSWo0dH7MKnIfnfdKjcGIwReabCuiPEv/\nl5/XTk74734aJ9dYx+TLOg==\n-----END PRIVATE KEY-----\n",
+  "client_email": "segtblueteam@segt-blueteam.iam.gserviceaccount.com",
+  "client_id": "105065933302434393511",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/segtblueteam%40segt-blueteam.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
