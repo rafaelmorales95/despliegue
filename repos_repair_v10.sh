@@ -166,36 +166,32 @@ function fix_broken_dependencies() {
     fi
 }
 
-# Función para eliminar la clave GPG expirada de MySQL y añadir la nueva
-function fix_mysql_gpg() {
-    MYSQL_REPO_KEY="5072E1F5"
-    NEW_KEY_URL="https://repo.mysql.com/RPM-GPG-KEY-mysql-2022"
-    KEY_FILE="RPM-GPG-KEY-mysql-2022"
+# Función para añadir la clave GPG de MySQL solo si no existe
+function fix_mysql_update() {
+    log "Corrigiendo el error de actualización de MySQL..."
 
-    log "Eliminando la clave GPG expirada ($MYSQL_REPO_KEY)..."
-    sudo apt-key del "$MYSQL_REPO_KEY" >> "$log_file" 2>&1
-    if [ $? -eq 0 ]; then
-        log "Clave GPG expirada eliminada correctamente."
+    # Comprobar si la clave de MySQL ya está presente
+    if [ ! -f /usr/share/keyrings/mysql.gpg ]; then
+        log "Clave de firma de MySQL no encontrada. Descargando... "
+        
+        # Descargar la clave y crear el archivo keyring (sobrescribiendo sin preguntar)
+        wget -q -O - https://dev.mysql.com/get/mysql-apt-config_0.8.17-1_all.deb | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/mysql.gpg
+        if [ $? -eq 0 ]; then
+            log "Clave de firma de MySQL descargada y guardada correctamente."
+        else
+            log "Error al descargar la clave de firma de MySQL."
+            exit 1
+        fi
     else
-        log "Error al eliminar la clave GPG expirada."
-        exit 1
+        log "La clave GPG de MySQL ya está presente, no es necesario descargarla."
     fi
 
-    log "Descargando la nueva clave GPG desde $NEW_KEY_URL..."
-    wget "$NEW_KEY_URL" >> "$log_file" 2>&1
+    # Crear el archivo de repositorio de MySQL
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/mysql.gpg] https://dev.mysql.com/get/apt/mysql/8.0/ubuntu/ stable mysql-apt-config" | sudo tee /etc/apt/sources.list.d/mysql.list > /dev/null
     if [ $? -eq 0 ]; then
-        log "Nueva clave GPG descargada correctamente."
+        log "Repositorio de MySQL configurado correctamente en /etc/apt/sources.list.d/mysql.list."
     else
-        log "Error al descargar la nueva clave GPG."
-        exit 1
-    fi
-
-    log "Importando la nueva clave GPG..."
-    sudo apt-key add "$KEY_FILE" >> "$log_file" 2>&1
-    if [ $? -eq 0 ]; then
-        log "Nueva clave GPG importada correctamente."
-    else
-        log "Error al importar la nueva clave GPG."
+        log "Error al configurar el repositorio de MySQL."
         exit 1
     fi
 }
