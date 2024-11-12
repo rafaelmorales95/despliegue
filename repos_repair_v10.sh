@@ -226,7 +226,7 @@ fix_google_chrome_update
 fix_broken_dependencies
 
 # Arreglar clave GPG de MySQL
-fix_mysql_gpg
+fix_mysql_update
 
 log "Proceso completado."
 
