@@ -43,9 +43,14 @@ function disable_ubuntu_pro() {
     log "Ubuntu Pro desactivado correctamente."
 }
 
-# Función para corregir Google Chrome error de actualización
 function fix_google_chrome_update() {
     log "Corrigiendo el error de actualización de Google Chrome..."
+
+    # Verificar y eliminar el archivo de clave si ya existe
+    if [ -f /usr/share/keyrings/google-chrome.gpg ]; then
+        sudo rm /usr/share/keyrings/google-chrome.gpg
+        log "Archivo de clave antiguo eliminado."
+    fi
 
     # Descargar la clave y crear el archivo keyring (sobrescribiendo sin preguntar)
     wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/google-chrome.gpg
@@ -65,6 +70,7 @@ function fix_google_chrome_update() {
         exit 1
     fi
 }
+
 
 # Función para crear un nuevo sources.list basado en la versión de Ubuntu
 function create_sources_list() {
