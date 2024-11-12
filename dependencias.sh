@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 LOG_FILE="/var/log/hardening.log"
 CSV_LOG_FILE="/var/log/hardening_log.csv"
 SHEET_ID="1jWAH06G2BKnCPl6UT4vZs2CMMVIPJ9-ZSE3OBQvaeUY"
