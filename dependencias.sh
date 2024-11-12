@@ -145,73 +145,68 @@ generate_system_data() {
     HOSTNAME=$(hostname)
     OS_INFO=$(uname -o)
     KERNEL=$(uname -r)
-    CPU=$(lscpu | grep "Model name:" | awk -F ': ' '{print $2}')
+    CPU=$(lscpu | grep "Model name:" | awk -F ': ' '{print $2}' | sed 's/"/\\"/g')
     RAM=$(free -m | awk '/Mem:/ {print $2" MB"}')
     DISK=$(df -h / | awk 'NR==2 {print $4}')
     IP_ADDRESS=$(hostname -I | awk '{print $1}')
     ADMIN_STATUS=$(if [ "$EUID" -eq 0 ]; then echo "Sí"; else echo "No"; fi)
     DOWNLOADED="Si"
 
-    # Verificación de ClamAV y otros paquetes de seguridad
     CLAMAV_INSTALLED=$(dpkg -l | grep -q clamav && echo "Sí" || echo "No")
     CLAMAV_SERVICE_STATUS=$(systemctl is-active clamav-daemon 2>/dev/null || echo "No instalado")
     AUTOS_INSTALLED=$(dpkg -l | grep -q autofs && echo "Sí" || echo "No")
 
-    # Verificación del usuario secops
+    SECOPS_EXISTS="No"
+    SECOPS_SUDO_GROUP="No aplica"
+    SECOPS_PASS_EXPIRY="No aplica"
     if id "secops" &>/dev/null; then
         SECOPS_EXISTS="Existe"
         SECOPS_SUDO_GROUP=$(groups secops | grep -q sudo && echo "Si" || echo "No")
         SECOPS_PASS_EXPIRY=$(chage -l secops | grep "Password expires" | grep -q "never" && echo "Si" || echo "No")
-    else
-        SECOPS_EXISTS="No"
-        SECOPS_SUDO_GROUP="No aplica"
-        SECOPS_PASS_EXPIRY="No aplica"
     fi
 
-    # Otros parámetros de hardening
-    HARDENING_STATUS="No verificado"  # Placeholder
-    MOTD_STATUS="No verificado"       # Placeholder
+    HARDENING_STATUS="No verificado"
+    MOTD_STATUS="No verificado"
     TIME_STATUS=$(timedatectl show | grep -q "NTP=yes" && echo "Sincronizado" || echo "Desincronizado")
     UFW_STATUS=$(ufw status | grep -q "Status: active" && echo "Activo" || echo "Inactivo")
     ufw_policy=$(ufw status | grep "Default:" | awk '{print $2}')
-    EXPIRY_STATUS="No verificado"     # Placeholder para verificar si la contraseña root no caduca
-    other_users_expiry_status="No verificado"  # Placeholder
-    sudoers_edit_status="No verificado"  # Placeholder
-    blacklist_usb_storage_set="No verificado"  # Placeholder
-    APT_STATUS="No verificado"  # Placeholder inicial
+    EXPIRY_STATUS="No verificado"
+    other_users_expiry_status="No verificado"
+    sudoers_edit_status="No verificado"
+    blacklist_usb_storage_set="No verificado"
+    APT_STATUS="No verificado"
 
-    cat <<EOF
-{
-    "Fecha_hora": "$DATE_TIME",
-    "Hostname": "$HOSTNAME",
-    "Sistema_Operativo": "$OS_INFO",
-    "Kernel": "$KERNEL",
-    "CPU": "$CPU",
-    "RAM": "$RAM",
-    "Disco_Libre": "$DISK",
-    "Downloaded": "$DOWNLOADED",
-    "IP": "$IP_ADDRESS",
-    "Ejecucion_como_Root": "$ADMIN_STATUS",
-    "Version_del_Script": "$VERSION",
-    "Existencia_de_secops": "$SECOPS_EXISTS",
-    "secops_en_grupo_sudo": "$SECOPS_SUDO_GROUP",
-    "Contraseña_secops_nunca_caduca": "$SECOPS_PASS_EXPIRY",
-    "ClamAV_Instalado": "$CLAMAV_INSTALLED",
-    "Estado_del_servicio_ClamAV": "$CLAMAV_SERVICE_STATUS",
-    "Estado_del_paquete_autofs": "$AUTOS_INSTALLED",
-    "Estado_hardening_secops": "$HARDENING_STATUS",
-    "Modificacion_a_MOTD": "$MOTD_STATUS",
-    "Sincronizacion_de_tiempo": "$TIME_STATUS",
-    "Firewall": "$UFW_STATUS",
-    "Politica_firewall": "$ufw_policy",
-    "Contraseña_de_root_no_caduca": "$EXPIRY_STATUS",
-    "Usuarios_con_password_expirado": "$other_users_expiry_status",
-    "Estado_sudoers": "$sudoers_edit_status",
-    "Estado_blacklist_usb_storage": "$blacklist_usb_storage_set",
-    "Estado_APT": "$APT_STATUS"
+    jq -n \
+        --arg fecha "$DATE_TIME" \
+        --arg hostname "$HOSTNAME" \
+        --arg sistema "$OS_INFO" \
+        --arg kernel "$KERNEL" \
+        --arg cpu "$CPU" \
+        --arg ram "$RAM" \
+        --arg disco "$DISK" \
+        --arg descargado "$DOWNLOADED" \
+        --arg ip "$IP_ADDRESS" \
+        --arg admin "$ADMIN_STATUS" \
+        --arg version "$VERSION" \
+        --arg secops "$SECOPS_EXISTS" \
+        --arg secops_sudo "$SECOPS_SUDO_GROUP" \
+        --arg secops_expiry "$SECOPS_PASS_EXPIRY" \
+        --arg clamav "$CLAMAV_INSTALLED" \
+        --arg clamav_status "$CLAMAV_SERVICE_STATUS" \
+        --arg autofs "$AUTOS_INSTALLED" \
+        --arg hardening "$HARDENING_STATUS" \
+        --arg motd "$MOTD_STATUS" \
+        --arg tiempo "$TIME_STATUS" \
+        --arg firewall "$UFW_STATUS" \
+        --arg politica_firewall "$ufw_policy" \
+        --arg root_expiry "$EXPIRY_STATUS" \
+        --arg users_expiry "$other_users_expiry_status" \
+        --arg sudoers "$sudoers_edit_status" \
+        --arg usb_storage "$blacklist_usb_storage_set" \
+        --arg apt_status "$APT_STATUS" \
+        '{Fecha_hora: $fecha, Hostname: $hostname, Sistema_Operativo: $sistema, Kernel: $kernel, CPU: $cpu, RAM: $ram, Disco_Libre: $disco, Downloaded: $descargado, IP: $ip, Ejecucion_como_Root: $admin, Version_del_Script: $version, Existencia_de_secops: $secops, secops_en_grupo_sudo: $secops_sudo, Contraseña_secops_nunca_caduca: $secops_expiry, ClamAV_Instalado: $clamav, Estado_del_servicio_ClamAV: $clamav_status, Estado_del_paquete_autofs: $autofs, Estado_hardening_secops: $hardening, Modificacion_a_MOTD: $motd, Sincronizacion_de_tiempo: $tiempo, Firewall: $firewall, Politica_firewall: $politica_firewall, Contraseña_de_root_no_caduca: $root_expiry, Usuarios_con_password_expirado: $users_expiry, Estado_sudoers: $sudoers, Estado_blacklist_usb_storage: $usb_storage, Estado_APT: $apt_status}'
 }
-EOF
-}
+
 
 
 
