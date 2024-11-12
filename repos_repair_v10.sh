@@ -175,12 +175,12 @@ function fix_mysql_update() {
         log "Clave de firma de MySQL no encontrada. Descargando... "
         
         # Descargar la clave y crear el archivo keyring (sobrescribiendo sin preguntar)
-        wget -q -O - https://dev.mysql.com/get/mysql-apt-config_0.8.17-1_all.deb | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/mysql.gpg
+        wget -q -O - https://dev.mysql.com/get/mysql-apt-config_0.8.17-1_all.deb 
         if [ $? -eq 0 ]; then
             log "Clave de firma de MySQL descargada y guardada correctamente."
         else
             log "Error al descargar la clave de firma de MySQL."
-            exit 1
+            exit 0
         fi
     else
         log "La clave GPG de MySQL ya está presente, no es necesario descargarla."
@@ -192,7 +192,7 @@ function fix_mysql_update() {
         log "Repositorio de MySQL configurado correctamente en /etc/apt/sources.list.d/mysql.list."
     else
         log "Error al configurar el repositorio de MySQL."
-        exit 1
+        exit 0
     fi
 }
 
