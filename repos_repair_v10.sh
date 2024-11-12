@@ -166,35 +166,33 @@ function fix_broken_dependencies() {
     fi
 }
 
-# Función para añadir la clave GPG de MySQL solo si no existe
-function fix_mysql_update() {
-    log "Corrigiendo el error de actualización de MySQL..."
+# Verificar si MySQL está instalado
+if dpkg -l | grep -q mysql-server; then
+    echo "MySQL está instalado, procediendo con la corrección del repositorio."
 
-    # Comprobar si la clave de MySQL ya está presente
-    if [ ! -f /usr/share/keyrings/mysql.gpg ]; then
-        log "Clave de firma de MySQL no encontrada. Descargando... "
-        
-        # Descargar la clave y crear el archivo keyring (sobrescribiendo sin preguntar)
-        wget -q -O - https://dev.mysql.com/get/mysql-apt-config_0.8.17-1_all.deb 
-        if [ $? -eq 0 ]; then
-            log "Clave de firma de MySQL descargada y guardada correctamente."
-        else
-            log "Error al descargar la clave de firma de MySQL."
-            exit 0
-        fi
-    else
-        log "La clave GPG de MySQL ya está presente, no es necesario descargarla."
-    fi
+    # Verificar si el archivo del repositorio ya existe
+    if ! grep -q "dev.mysql.com" /etc/apt/sources.list.d/*; then
+        echo "No se encontró el repositorio de MySQL, agregando el repositorio correcto."
 
-    # Crear el archivo de repositorio de MySQL
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/mysql.gpg] https://dev.mysql.com/get/apt/mysql/8.0/ubuntu/ stable mysql-apt-config" | sudo tee /etc/apt/sources.list.d/mysql.list > /dev/null
-    if [ $? -eq 0 ]; then
-        log "Repositorio de MySQL configurado correctamente en /etc/apt/sources.list.d/mysql.list."
+        # Descargar el archivo de configuración de MySQL
+        wget -q https://dev.mysql.com/get/apt/mysql-apt-config_0.8.17-1_all.deb -O /tmp/mysql-apt-config.deb
+
+        # Instalar el paquete de configuración de MySQL
+        sudo dpkg -i /tmp/mysql-apt-config.deb
+        rm /tmp/mysql-apt-config.deb
+
+        # Actualizar la lista de paquetes
+        sudo apt update
+
+        echo "Repositorio de MySQL agregado y lista de paquetes actualizada."
     else
-        log "Error al configurar el repositorio de MySQL."
-        exit 0
+        echo "El repositorio de MySQL ya está configurado correctamente."
     fi
-}
+else
+    echo "MySQL no está instalado, no se realizará ninguna acción."
+fi
+
+
 
 # Iniciar el proceso y registrar en log
 log "Iniciando el proceso de actualización y corrección de repositorios."
@@ -225,9 +223,7 @@ fix_google_chrome_update
 # Verificar y arreglar dependencias rotas
 fix_broken_dependencies
 
-# Arreglar clave GPG de MySQL
-fix_mysql_update
 
 log "Proceso completado."
 
-
+# Salir con éxito
