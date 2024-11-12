@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 LOG_FILE="/var/log/hardening.log"
 CSV_LOG_FILE="/var/log/hardening_log.csv"
 SHEET_ID="1jWAH06G2BKnCPl6UT4vZs2CMMVIPJ9-ZSE3OBQvaeUY"
@@ -118,6 +117,19 @@ generate_system_data() {
 EOF
 }
 
+delete_file() {
+    local file_name=$1
+    echo "Borrando el archivo ${file_name}..."
+    rm -f "${file_name}"
+    
+    if [ $? -eq 0 ]; then
+        echo "Archivo ${file_name} borrado exitosamente."
+    else
+        echo "No se pudo borrar el archivo ${file_name}."
+        exit 1
+    fi
+}
+
 download_file() {
     local url=$1
     local file_name=$2
@@ -145,3 +157,10 @@ download_file "$DOWNLOAD_URL" "$FILE_NAME"
 # Generar los datos del sistema y enviarlos a Google Sheets
 json_data=$(generate_system_data)
 send_to_google_sheets "$json_data" "false"
+
+delete_file "${FILE_NAME}"
+
+
+
+
+
