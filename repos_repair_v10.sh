@@ -230,5 +230,4 @@ fix_mysql_update
 
 log "Proceso completado."
 
-# Salir con éxito
-exit 0
+
