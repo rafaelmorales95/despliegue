@@ -204,41 +204,6 @@ function Add-ToCsv {
 }
 
 
-
-
-# Función para descargar y descomprimir
-function Download-And-Unzip {
-    Clear-Host
-    Write-Host "====================================" -ForegroundColor Cyan
-    Write-Host "    DESCARGAR Y DESCOMPRIMIR ZIP" -ForegroundColor Cyan
-    Write-Host "====================================" -ForegroundColor Cyan
-
-    $url = "https://data.rafalan.pro/web/client/pubshares/2VLLBDM6jrUbnn3teVvVJW?compress=false"
-    $zipPath = "C:\lgpo\archivo.zip"
-    $extractPath = "C:\lgpo"
-    $backupFolder = "C:\lgpo\Respaldos"
-
-    if (Test-Path -Path $backupFolder) {
-        Write-Host "La carpeta Respaldos ya existe en $backupFolder, por lo que el hardening ya está aplicado" -ForegroundColor Yellow
-        Add-ToCsv -Parameter "Hardening" -Status "OK"
-        return
-    }
-
-    if (-not (Test-Path -Path $extractPath)) {
-        New-Item -ItemType Directory -Path $extractPath
-    }
-
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $zipPath
-        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-        Remove-Item -Path $zipPath -Force
-        Add-ToCsv -Parameter "Descarga y descompresión" -Status "OK"
-    }
-    catch {
-        Add-ToCsv -Parameter "Descarga y descompresión" -Status "Error"
-    }
-}
-
 # Función para descargar y descomprimir
 function Download-And-Unzip {
     Clear-Host
