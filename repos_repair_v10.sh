@@ -161,10 +161,24 @@ function fix_broken_dependencies() {
     if [ -n "$dpkg_audit_output" ]; then
         log "Se encontraron problemas de dependencias rotas. Detalles:"
         log "$dpkg_audit_output"
+        
+        # Intentar corregir las dependencias rotas
+        log "Intentando corregir las dependencias rotas..."
+        sudo apt --fix-broken install -y
+        
+        # Verificar nuevamente si el problema persiste
+        dpkg_audit_output=$(dpkg --audit 2>&1)
+        if [ -n "$dpkg_audit_output" ]; then
+            log "Aún existen problemas de dependencias rotas después de la corrección:"
+            log "$dpkg_audit_output"
+        else
+            log "Las dependencias rotas fueron corregidas exitosamente."
+        fi
     else
         log "No se encontraron problemas de dependencias rotas."
     fi
 }
+
 
 # Verificar si MySQL está instalado
 if dpkg -l | grep -q mysql-server; then
