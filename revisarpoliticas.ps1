@@ -1,22 +1,45 @@
 # Cambiar la política de ejecución temporalmente
 Set-ExecutionPolicy Bypass -Scope Process -Force
 
-# Definir la ruta del archivo de log
+# Definir la ruta del archivo de log y el CSV
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $logFile = Join-Path $scriptDir "log.txt"
+$csvFile = Join-Path $scriptDir "resultado.csv"
+
+# Encabezados esperados
+$expectedHeaders = "Fecha y Hora,Hostname,SO,IP,Parámetro,Estado"
+
+# Función para asegurar que el encabezado esté presente
+function Ensure-CSVHeader {
+    if (-not (Test-Path -Path $csvFile)) {
+        # Si el archivo no existe, crearlo con el encabezado
+        Add-Content -Path $csvFile -Value $expectedHeaders -Encoding UTF8
+    } else {
+        # Si el archivo existe, verificar el encabezado
+        $firstLine = Get-Content -Path $csvFile -TotalCount 1
+        if ($firstLine -ne $expectedHeaders) {
+            # Si el encabezado no coincide, añadirlo al inicio del archivo
+            $content = Get-Content -Path $csvFile
+            Set-Content -Path $csvFile -Value $expectedHeaders -Encoding UTF8
+            Add-Content -Path $csvFile -Value $content
+        }
+    }
+}
 
 # Redirigir la salida estándar y de error al archivo de log
 Start-Transcript -Path $logFile -Append
 
+# Función para mostrar el menú
 function Show-Menu {
     Clear-Host
     Write-Host "====================================" -ForegroundColor Cyan
     Write-Host "        MENU DE DIRECTIVAS" -ForegroundColor Cyan
     Write-Host "====================================" -ForegroundColor Cyan
-    Write-Host "1. Verificar status" -ForegroundColor Yellow
+    Write-Host "1. Descarga dependencias" -ForegroundColor Yellow
     Write-Host "2. Aplicar directivas" -ForegroundColor Yellow
     Write-Host "3. Backup directivas" -ForegroundColor Yellow
-    Write-Host "4. Salir" -ForegroundColor Yellow
+    Write-Host "4. Ejecutar todo (Backup + Aplicar)" -ForegroundColor Yellow
+    Write-Host "5. Salir" -ForegroundColor Yellow
 }
 
 function Get-SecurityPolicy {
@@ -157,96 +180,169 @@ function Verify-Status {
             Write-Host "Política ${policy}: Incorrecta (Actual: ${currentValue}, Esperado: ${expectedValue})" -ForegroundColor Red
         }
     }
-
-    Write-Host ""
-    Write-Host "------------------------------------" -ForegroundColor DarkGreen
-    Write-Host "Presiona Enter para continuar" -ForegroundColor Yellow
-    Read-Host
 }
 
+# Función para agregar entradas al archivo CSV
+function Add-ToCsv {
+    param (
+        [string]$Parameter,
+        [string]$Status
+    )
+    Ensure-CSVHeader
+    $systemInfo = @{
+        FechaHora        = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+        Hostname         = $env:COMPUTERNAME
+        SistemaOperativo = (Get-CimInstance Win32_OperatingSystem).Caption
+        IP               = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias Ethernet | Select-Object -First 1).IPAddress
+    }
+    $data = "{0},{1},{2},{3},{4},{5}" -f $systemInfo.FechaHora, $systemInfo.Hostname, $systemInfo.SistemaOperativo, $systemInfo.IP, $Parameter, $Status
+    try {
+        Add-Content -Path $csvFile -Value $data
+    } catch {
+        Write-Host "No se pudo escribir en el archivo CSV." -ForegroundColor Red
+    }
+}
+
+
+
+
+# Función para descargar y descomprimir
+function Download-And-Unzip {
+    Clear-Host
+    Write-Host "====================================" -ForegroundColor Cyan
+    Write-Host "    DESCARGAR Y DESCOMPRIMIR ZIP" -ForegroundColor Cyan
+    Write-Host "====================================" -ForegroundColor Cyan
+
+    $url = "https://data.rafalan.pro/web/client/pubshares/2VLLBDM6jrUbnn3teVvVJW?compress=false"
+    $zipPath = "C:\lgpo\archivo.zip"
+    $extractPath = "C:\lgpo"
+    $backupFolder = "C:\lgpo\Respaldos"
+
+    if (Test-Path -Path $backupFolder) {
+        Write-Host "La carpeta Respaldos ya existe en $backupFolder, por lo que el hardening ya está aplicado" -ForegroundColor Yellow
+        Add-ToCsv -Parameter "Hardening" -Status "OK"
+        return
+    }
+
+    if (-not (Test-Path -Path $extractPath)) {
+        New-Item -ItemType Directory -Path $extractPath
+    }
+
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $zipPath
+        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+        Remove-Item -Path $zipPath -Force
+        Add-ToCsv -Parameter "Descarga y descompresión" -Status "OK"
+    }
+    catch {
+        Add-ToCsv -Parameter "Descarga y descompresión" -Status "Error"
+    }
+}
+
+# Función para descargar y descomprimir
+function Download-And-Unzip {
+    Clear-Host
+    Write-Host "====================================" -ForegroundColor Cyan
+    Write-Host "    DESCARGAR Y DESCOMPRIMIR ZIP" -ForegroundColor Cyan
+    Write-Host "====================================" -ForegroundColor Cyan
+
+    $url = "https://data.rafalan.pro/web/client/pubshares/2VLLBDM6jrUbnn3teVvVJW?compress=false"
+    $zipPath = "C:\lgpo\archivo.zip"
+    $extractPath = "C:\lgpo"
+    $backupFolder = "C:\lgpo\Respaldos"
+
+    if (Test-Path -Path $backupFolder) {
+        Write-Host "La carpeta Respaldos ya existe en $backupFolder, por lo que el hardening ya está aplicado" -ForegroundColor Yellow
+        Add-ToCsv -Parameter "Hardening" -Status "OK"
+        return
+    }
+
+    if (-not (Test-Path -Path $extractPath)) {
+        New-Item -ItemType Directory -Path $extractPath
+    }
+
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $zipPath
+        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+        Remove-Item -Path $zipPath -Force
+        Add-ToCsv -Parameter "Descarga y descompresión" -Status "OK"
+    }
+    catch {
+        Add-ToCsv -Parameter "Descarga y descompresión" -Status "Error"
+    }
+}
+
+# Función para aplicar directivas
 function Apply-Policies {
     Clear-Host
     Write-Host "====================================" -ForegroundColor Cyan
     Write-Host "    APLICACION DE DIRECTIVAS" -ForegroundColor Cyan
     Write-Host "====================================" -ForegroundColor Cyan
     Write-Host "Aplicando directivas de grupo desde C:\lgpo\Respaldos\Directivas..." -ForegroundColor Green
-    Write-Host ""
-    # Ruta donde está la herramienta LGPO.exe
+
     $lgpoPath = "C:\lgpo\LGPO.exe"
-    # Ruta de las directivas
-    $policyPath = "C:\lgpo\Politicas"
-    # Aplicar las directivas
+    $policyPath = "C:\lgpo\Respaldos\Directivas"
     & $lgpoPath /g $policyPath
 
-    $exitCode = $LASTEXITCODE
-
-    if ($exitCode -eq 0) {
+    if ($LASTEXITCODE -eq 0) {
         Write-Host "Las directivas se aplicaron correctamente desde $policyPath" -ForegroundColor Green
+        Add-ToCsv -Parameter "Aplicación de directivas" -Status "OK"
     } else {
-        Write-Host "Hubo un error al aplicar las directivas desde $policyPath." -ForegroundColor Red
+        Write-Host "Hubo un error al aplicar las directivas desde $policyPath" -ForegroundColor Red
+        Add-ToCsv -Parameter "Aplicación de directivas" -Status "Error"
     }
-    Write-Host ""
-    Write-Host "------------------------------------" -ForegroundColor DarkGreen
-    Write-Host "Presiona Enter para continuar" -ForegroundColor Yellow
-    Read-Host
 }
 
+# Función para respaldar directivas
 function Backup-Policies {
     Clear-Host
     Write-Host "====================================" -ForegroundColor Cyan
     Write-Host "    RESPALDO DE DIRECTIVAS" -ForegroundColor Cyan
     Write-Host "====================================" -ForegroundColor Cyan
-    # Ruta donde está la herramienta LGPO.exe
+
     $lgpoPath = "C:\lgpo\LGPO.exe"
-    # Ruta donde se guardará el respaldo
     $backupPath = "C:\lgpo\Respaldos\Directivas"
 
-    # Crear la carpeta de respaldo si no existe
     if (-not (Test-Path -Path $backupPath)) {
         New-Item -ItemType Directory -Path $backupPath
     }
 
-    Write-Host "Realizando el respaldo de las directivas de grupo locales..." -ForegroundColor Green
-    Write-Host ""
     & $lgpoPath /b $backupPath
-
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "El respaldo de las directivas de grupo locales se realizó correctamente en $backupPath" -ForegroundColor Green
+        Add-ToCsv -Parameter "Backup de directivas" -Status "OK"
     } else {
-        Write-Host "Hubo un error al realizar el respaldo de las directivas de grupo locales." -ForegroundColor Red
+        Add-ToCsv -Parameter "Backup de directivas" -Status "Error"
     }
-    Write-Host ""
-    Write-Host "------------------------------------" -ForegroundColor DarkGreen
-    Write-Host "Presiona Enter para continuar" -ForegroundColor Yellow
-    Read-Host
 }
 
+# Función para ejecutar todo
+function Run-All {
+    Clear-Host
+    Write-Host "====================================" -ForegroundColor Cyan
+    Write-Host "    EJECUTANDO TODO EL SCRIPT" -ForegroundColor Cyan
+    Write-Host "====================================" -ForegroundColor Cyan
+
+    Download-And-Unzip
+    Backup-Policies
+    #Apply-Policies
+}
+
+# Menú principal
 while ($true) {
     Show-Menu
     $selection = Read-Host "Selecciona una opción"
     switch ($selection) {
-        1 {
-            Verify-Status
-        }
-        2 {
-            Apply-Policies
-        }
-        3 {
-            Backup-Policies
-        }
-        4 {
+        1 { Download-And-Unzip }
+        2 { Apply-Policies }
+        3 { Backup-Policies }
+        4 { Run-All }
+        5 {
             Write-Host "Saliendo..." -ForegroundColor Red
             Stop-Transcript
             exit
         }
         default {
-            Write-Host "Opción no válida. Inténtalo de nuevo." -ForegroundColor Red
-            Write-Host "------------------------------------" -ForegroundColor DarkGreen
-            Write-Host "Presiona Enter para continuar" -ForegroundColor Yellow
-            Read-Host
+            Write-Host "Opción no válida." -ForegroundColor Red
         }
     }
 }
-
-# Restablecer la politica de ejecucion a su valor original
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy $originalExecutionPolicy -Force
