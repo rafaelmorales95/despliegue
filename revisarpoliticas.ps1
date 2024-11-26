@@ -328,21 +328,26 @@ function Run-All {
 }
 
 # Menú principal
-while ($true) {
-    Show-Menu
-    $selection = Read-Host "Selecciona una opción"
-    switch ($selection) {
-        1 { Download-And-Unzip }
-        2 { Apply-Policies }
-        3 { Backup-Policies }
-        4 { Run-All }
-        5 {
-            Write-Host "Saliendo..." -ForegroundColor Red
-            Stop-Transcript
-            exit
-        }
-        default {
-            Write-Host "Opción no válida." -ForegroundColor Red
+if ($args.Count -eq 0) {
+    # Si no se pasa parámetro, ejecuta Run-All
+    Run-All
+} else {
+    while ($true) {
+        Show-Menu
+        $selection = Read-Host "Selecciona una opción"
+        switch ($selection) {
+            1 { Download-And-Unzip }
+            2 { Apply-Policies }
+            3 { Backup-Policies }
+            4 { Run-All }
+            5 {
+                Write-Host "Saliendo..." -ForegroundColor Red
+                Stop-Transcript
+                exit
+            }
+            default {
+                Write-Host "Opción no válida." -ForegroundColor Red
+            }
         }
     }
 }
