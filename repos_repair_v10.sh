@@ -192,7 +192,7 @@ if dpkg -l | grep -q mysql-server; then
         wget -q https://dev.mysql.com/get/apt/mysql-apt-config_0.8.17-1_all.deb -O /tmp/mysql-apt-config.deb
 
         # Instalar el paquete de configuración de MySQL
-        sudo dpkg -i /tmp/mysql-apt-config.deb
+        sudo DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/mysql-apt-config.deb
         rm /tmp/mysql-apt-config.deb
 
         # Actualizar la lista de paquetes
@@ -204,6 +204,61 @@ if dpkg -l | grep -q mysql-server; then
     fi
 else
     echo "MySQL no está instalado, no se realizará ninguna acción."
+fi
+
+# Función para agregar una clave pública GPG
+add_gpg_key() {
+    local key_id="$1"
+    echo "\nIntentando agregar la clave GPG: $key_id"
+
+    # Descargar la clave pública GPG
+    gpg --keyserver keyserver.ubuntu.com --recv-keys "$key_id" || {
+        echo "Error al descargar la clave desde keyserver.ubuntu.com."
+        return 1
+    }
+
+    # Exportar la clave al formato apt
+    gpg --export "$key_id" | sudo apt-key add - || {
+        echo "Error al agregar la clave a apt-key."
+        return 1
+    }
+
+    echo "Clave GPG $key_id agregada exitosamente."
+    return 0
+}
+
+# Repositorio problemático detectado en el error
+REPO_URL="http://repo.mysql.com/apt/ubuntu"
+KEY_ID="B7B3B788A8D3785C"
+
+# Verificar si el repositorio está presente en sources.list.d
+if grep -rq "$REPO_URL" /etc/apt/sources.list /etc/apt/sources.list.d/; then
+    echo "\nRepositorio detectado: $REPO_URL"
+else
+    echo "\nEl repositorio $REPO_URL no está configurado en sources.list o sources.list.d."
+    exit 1
+fi
+
+# Intentar agregar la clave GPG
+if add_gpg_key "$KEY_ID"; then
+    echo "\nClave agregada exitosamente. Actualizando lista de paquetes..."
+    sudo apt update || {
+        echo "Error al ejecutar 'apt update'."
+        exit 1
+    }
+else
+    echo "\nNo se pudo agregar la clave GPG. Por favor, verifica manualmente."
+    exit 1
+fi
+
+# Buscar y deshabilitar repositorios problemáticos si persiste el error
+if sudo apt update 2>&1 | grep -q "NO_PUBKEY"; then
+    echo "\nPersisten los errores de clave pública. Deshabilitando el repositorio: $REPO_URL"
+    sudo sed -i.bak "/$REPO_URL/ s/^/#/" /etc/apt/sources.list
+    sudo find /etc/apt/sources.list.d -type f -exec sed -i.bak "/$REPO_URL/ s/^/#/" {} \;
+    echo "Repositorio deshabilitado."
+else
+    echo "\nLista de paquetes actualizada sin errores."
 fi
 
 
