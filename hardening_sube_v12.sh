@@ -4,7 +4,7 @@
 LOG_FILE="/var/log/hardening.log"
 CSV_LOG_FILE="/var/log/hardening_log.csv"
 SHEET_ID="1jWAH06G2BKnCPl6UT4vZs2CMMVIPJ9-ZSE3OBQvaeUY"
-SHEET_NAME="ubuntu"
+SHEET_NAME="3"
 VERSION="2.2"
 DOWNLOAD_URL="https://data.rafalan.pro/web/client/pubshares/eJ4gxetw6gshcmDAytAZ4S?compress=false"
 FILE_NAME="Key.json"
