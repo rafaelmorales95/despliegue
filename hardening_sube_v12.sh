@@ -1,11 +1,13 @@
 #!/bin/bash
 
+#Agregar MacAddress principal, actualmente usada
+
 
 LOG_FILE="/var/log/hardening.log"
 CSV_LOG_FILE="/var/log/hardening_log.csv"
 SHEET_ID="1jWAH06G2BKnCPl6UT4vZs2CMMVIPJ9-ZSE3OBQvaeUY"
 SHEET_NAME="3"
-VERSION="2.2"
+VERSION="2.3"
 DOWNLOAD_URL="https://data.rafalan.pro/web/client/pubshares/eJ4gxetw6gshcmDAytAZ4S?compress=false"
 FILE_NAME="Key.json"
 
@@ -26,8 +28,8 @@ gc = gspread.authorize(CREDS)
 sheet = gc.open_by_key("$SHEET_ID").worksheet("$SHEET_NAME")
 
 # Verificar encabezado
-header = ["Fecha y hora", "Hostname", "Sistema Operativo", "Kernel", "CPU", "RAM", "Disco Libre", "Key Downloaded", 
-          "IP", "Ejecucion como Root", "Version del Script", "Existencia de secops", 
+header = ["Fecha y hora", "Hostname", "Sistema Operativo", "Kernel", "Disco Libre", "Key Downloaded", 
+          "IP", "MAC_Address", "Usuarios", "Proxy_Configurado", "Ejecucion como Root", "Version del Script", "Existencia de secops", 
           "secops en grupo sudo", "Contraseña secops nunca caduca", "ClamAV Instalado", 
           "Estado del servicio ClamAV", "Estado del paquete autofs", "Estado hardening secops", 
           "Modificacion a MOTD", "Sincronizacion_de_tiempo", "Firewall", "Politica de Firewall", 
@@ -58,7 +60,7 @@ else:
     sheet.append_row(values)
     print("Nueva fila agregada exitosamente.")
 
-time.sleep(61)
+time.sleep(6)
 EOF
 }
 
@@ -75,13 +77,13 @@ delete_file() {
     fi
 }
 
+
+
 generate_system_data() {
     DATE_TIME=$(date "+%d-%m-%Y %H:%M:%S")
     HOSTNAME=$(hostname)
     OS_INFO=$(uname -o)
     KERNEL=$(uname -r)
-    CPU=$(lscpu | grep "Model name:" | awk -F ': ' '{print $2}')
-    RAM=$(free -m | awk '/Mem:/ {print $2" MB"}')
     DISK=$(df -h / | awk 'NR==2 {print $4}')
     IP_ADDRESS=$(hostname -I | awk '{print $1}')
     ADMIN_STATUS=$(if [ "$EUID" -eq 0 ]; then echo "Sí"; else echo "No"; fi)
@@ -95,6 +97,33 @@ generate_system_data() {
         SECOPS_SUDO_GROUP="No aplica"
         SECOPS_PASS_EXPIRY="No aplica"
     fi
+   MAC_ADDRESS="No revisado"
+
+
+
+    # Listar usuarios, excluyendo secops y soporte
+    USERS=$(getent passwd {1000..60000} | awk -F: '!/^secops$|^soporte$/ {print $1}' | tr '\n' ',' | sed 's/,$//')
+
+    # Obtener el usuario actual
+    CURRENT_USER=$(logname)
+
+    # Verificar si existe un proxy activo usando gsettings como el usuario local
+    PROXY_MODE=$(sudo -u "$CURRENT_USER" gsettings get org.gnome.system.proxy mode | tr -d "'")
+
+    if [[ "$PROXY_MODE" == "none" ]]; then
+        PROXY_STATUS="No configurado"
+    elif [[ "$PROXY_MODE" == "manual" ]]; then
+        HTTP_PROXY=$(sudo -u "$CURRENT_USER" gsettings get org.gnome.system.proxy.http host | tr -d "'")
+        HTTP_PORT=$(sudo -u "$CURRENT_USER" gsettings get org.gnome.system.proxy.http port | tr -d "'")
+        PROXY_STATUS="Activo (Manual: $HTTP_PROXY:$HTTP_PORT)"
+    elif [[ "$PROXY_MODE" == "auto" ]]; then
+        AUTO_URL=$(sudo -u "$CURRENT_USER" gsettings get org.gnome.system.proxy autoconfig-url | tr -d "'")
+        PROXY_STATUS="Activo (Automático: $AUTO_URL)"
+    else
+        PROXY_STATUS="Desconocido"
+    fi
+
+
 
     cat <<EOF
 {
@@ -102,11 +131,12 @@ generate_system_data() {
     "Hostname": "$HOSTNAME",
     "Sistema_Operativo": "$OS_INFO",
     "Kernel": "$KERNEL",
-    "CPU": "$CPU",
-    "RAM": "$RAM",
     "Disco_Libre": "$DISK",
-    "Downloaded": "$DOWNLOADED",
+    "Key Downloaded": "$KEY",
     "IP": "$IP_ADDRESS",
+    "MAC_Address": "$MAC_ADDRESS",
+    "Usuarios": "$USERS",
+    "Proxy_Configurado": "$PROXY_STATUS",
     "Ejecucion_como_Root": "$ADMIN_STATUS",
     "Version_del_Script": "$VERSION",
     "Existencia_de_secops": "$SECOPS_EXISTS",
