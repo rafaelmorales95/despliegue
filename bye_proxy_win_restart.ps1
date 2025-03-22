@@ -3,23 +3,17 @@ $logFile = "C:\Logs\update_log.txt"
 $nocodbUrl = "http://cc.nocodb.rafalan.pro/api/v2/tables/mqjbstu0hppfnkp/records"
 $token = "BF4KTVGn6We-R0gc3zl0gwmMMXDVafoEdsAaGRT3"
 $downloadDirectory = "C:\Downloads"
-$installerUrl = "https://www.mediafire.com/file/i125zhajsluh2at/FORCEPOINT-ONE-ENDPOINT-x64_Windows11.exe/file"
-$installerName = "FORCEPOINT-ONE-ENDPOINT-x64_Windows11.exe"
-$installerPath = "$downloadDirectory\$installerName"
-$scriptPath = "C:\Scripts\Disable-Proxy.ps1"  # Ruta del script de desbloqueo
-$taskName = "DisableProxyAfterReboot"        # Nombre de la tarea programada
+$restartFlagPath = "C:\Scripts\restart_flag.txt"
+$scriptPath = "C:\Scripts\WindowsUpdateProcess1.ps1"  # Ruta donde se guardará el script clonado
+$taskName = "WindowsUpdateProcess-test1007"
 
 # Crear directorios si no existen
 if (-not (Test-Path "C:\Logs")) {
-    New-Item -Path "C:\Logs" -ItemType Directory
+    New-Item -Path "C:\Logs" -ItemType Directory -Force
 }
 
 if (-not (Test-Path $downloadDirectory)) {
-    New-Item -Path $downloadDirectory -ItemType Directory
-}
-
-if (-not (Test-Path "C:\Scripts")) {
-    New-Item -Path "C:\Scripts" -ItemType Directory
+    New-Item -Path $downloadDirectory -ItemType Directory -Force
 }
 
 # Función para escribir en el log
@@ -30,60 +24,135 @@ function Write-Log {
     Add-Content -Path $logFile -Value $logMessage
 }
 
-# Función para obtener la versión actual de Forcepoint
-function Get-ForcepointVersion {
-    try {
-        # Ruta donde se encuentra el ejecutable de Forcepoint
-        $forcepointPath = "C:\Program Files\Websense\Websense Endpoint\F1EUI.exe"
-        if (Test-Path $forcepointPath) {
-            $versionInfo = (Get-Item $forcepointPath).VersionInfo
-            return $versionInfo.ProductVersion
-        } else {
-            Write-Log "Forcepoint no está instalado o la ruta es incorrecta."
-            return $null
-        }
-    } catch {
-        Write-Log "Error al obtener la versión de Forcepoint: $_"
-        return $null
-    }
+# Configuración inicial
+$logFile = "C:\Logs\update_log.txt"
+$scriptPath = "C:\Scripts\WindowsUpdateProcess.ps1"  # Ruta donde se guardará el script clonado
+$restartFlagPath = "C:\Scripts\restart_flag.txt"
+$taskName = "WindowsUpdateProcess-test1007"
+
+# Crear directorios si no existen
+if (-not (Test-Path "C:\Logs")) {
+    New-Item -Path "C:\Logs" -ItemType Directory -Force
 }
 
-# Función para descargar el instalador (si no existe)
-function Download-Installer {
-    if (Test-Path $installerPath) {
-        Write-Log "El instalador ya existe en $installerPath. No es necesario descargarlo."
-        return $installerPath
-    }
-
-    try {
-        Write-Log "Descargando el instalador de Forcepoint..."
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -ErrorAction Stop
-        Write-Log "Instalador descargado correctamente en $installerPath."
-        return $installerPath
-    } catch {
-        Write-Log "Error al descargar el instalador: $_"
-        return $null
-    }
+if (-not (Test-Path (Split-Path -Path $scriptPath -Parent))) {
+    New-Item -Path (Split-Path -Path $scriptPath -Parent) -ItemType Directory -Force
 }
 
-# Función para instalar el paquete de Forcepoint en modo silencioso sin reinicio
-function Install-Forcepoint {
-    param (
-        [string]$InstallerPath
-    )
+# Función para escribir en el log
+function Write-Log {
+    param ([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp - $Message"
+    Add-Content -Path $logFile -Value $logMessage
+}
+
+# Función para crear una tarea programada
+# Función para crear una tarea programada
+function Create-ScheduledTask {
     try {
-        Write-Log "Instalando el paquete de Forcepoint en modo silencioso sin reinicio..."
-        $process = Start-Process -FilePath $InstallerPath -ArgumentList '/v"/qn /norestart"' -Wait -NoNewWindow -PassThru
-        if ($process.ExitCode -eq 0) {
-            Write-Log "Paquete de Forcepoint instalado correctamente."
+        Write-Log "Creando la tarea programada '$taskName'..."
+
+        # Configurar la acción de la tarea
+        $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Unrestricted -File `"$scriptPath`""
+        
+        # Configurar el desencadenador para ejecutar al inicio con un retraso de 30 segundos
+        $taskTrigger = New-ScheduledTaskTrigger -AtStartup
+        $taskTrigger.Delay = "PT30S"  # Retraso de 30 segundos
+
+        # Configurar el principal (usuario y privilegios)
+        $taskPrincipal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Highest
+
+        # Configurar las opciones de la tarea
+        $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+
+        # Verificar si la tarea ya existe
+        if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+            Write-Log "La tarea programada '$taskName' ya existe. No es necesario crearla."
             return $true
-        } else {
-            Write-Log "Error durante la instalación. Código de salida: $($process.ExitCode)"
-            return $false
         }
+
+        # Crear la tarea programada
+        Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings
+        Write-Log "Tarea programada '$taskName' creada correctamente."
+        return $true
     } catch {
-        Write-Log "Error al instalar el paquete de Forcepoint: $_"
+        Write-Log "Error al crear la tarea programada: $_"
         return $false
+    }
+}
+
+# Función para clonar el script actual
+function Clone-Script {
+    try {
+        Write-Log "Clonando el script actual en $scriptPath..."
+
+        # Crear el directorio si no existe
+        $scriptDirectory = Split-Path -Path $scriptPath -Parent
+        if (-not (Test-Path $scriptDirectory)) {
+            New-Item -Path $scriptDirectory -ItemType Directory -Force | Out-Null
+        }
+
+        # Obtener la ruta del script actual
+        $scriptCurrentPath = $PSCommandPath
+
+        # Leer el contenido del script actual como una sola cadena (compatible con todas las versiones de PowerShell)
+        $scriptContent = Get-Content -Path $scriptCurrentPath | Out-String
+        Set-Content -Path $scriptPath -Value $scriptContent -Force
+        Write-Log "Script clonado correctamente en $scriptPath."
+        return $true
+    } catch {
+        Write-Log "Error al clonar el script: $_"
+        return $false
+    }
+}
+
+# Función para esperar 3 minutos antes de reiniciar
+function Wait-BeforeRestart {
+    $waitTime = 15  # 3 minutos en segundos
+    Write-Log "Esperando $($waitTime / 60) minutos antes de reiniciar..."
+    Start-Sleep -Seconds $waitTime
+}
+
+# Verificar si el script se está ejecutando después de un reinicio
+if (Test-Path $restartFlagPath) {
+    Write-Log "El script se está ejecutando después de un reinicio."
+    Remove-Item -Path $restartFlagPath -Force  # Eliminar la bandera después de usarla
+} else {
+    Write-Log "El script se está ejecutando por primera vez. Preparando el reinicio..."
+    
+    # Crear la bandera para indicar que se debe ejecutar después del reinicio
+    Set-Content -Path $restartFlagPath -Value "Reinicio pendiente"
+
+    # Clonar el script actual
+    $scriptCloned = Clone-Script
+
+    if ($scriptCloned) {
+        # Crear la tarea programada
+        $taskCreated = Create-ScheduledTask
+
+        if ($taskCreated) {
+            Write-Log "La tarea programada se creó correctamente. Preparando el reinicio..."
+            Wait-BeforeRestart
+            Write-Log "Reiniciando el sistema..."
+            #Restart-Computer -Force
+        } else {
+            Write-Log "No se pudo crear la tarea programada. Abortando el proceso."
+            exit 1
+        }
+    } else {
+        Write-Log "No se pudo clonar el script. Abortando el proceso."
+        exit 1
+    }
+}
+# Función para verificar privilegios de administrador
+function Check-AdminPrivileges {
+    $adminCheck = [System.Security.Principal.WindowsPrincipal]::new([System.Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $adminCheck.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Log "Este script debe ejecutarse como administrador."
+        exit 1
+    } else {
+        Write-Log "El script se ejecutó como administrador."
     }
 }
 
@@ -142,137 +211,461 @@ function Disable-Proxy {
     }
 }
 
-# Función para crear el script de desbloqueo del proxy
-function Create-DisableProxyScript {
-    param (
-        [string]$ScriptPath,
-        [string]$PreviousVersion
-    )
-    try {
-        Write-Log "Creando el script de desbloqueo del proxy en $ScriptPath..."
+# Función para instalar el proveedor de NuGet
+function Install-NuGetProvider {
+    $retryCount = 3
+    $retryDelay = 5
+    for ($i = 1; $i -le $retryCount; $i++) {
+        try {
+            Write-Log "Intento $i de ${retryCount}: Configurando TLS 1.2..."
+            # Configurar TLS 1.2 para descargas seguras
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-        # Contenido del script de desbloqueo
-        $scriptContent = @"
-# Configuración inicial
-`$logFile = "C:\Logs\update_log.txt"
-`$nocodbUrl = "http://cc.nocodb.rafalan.pro/api/v2/tables/mqjbstu0hppfnkp/records"
-`$token = "BF4KTVGn6We-R0gc3zl0gwmMMXDVafoEdsAaGRT3"
-`$downloadDirectory = "C:\Downloads"
-
-# Crear directorios si no existen
-if (-not (Test-Path "C:\Logs")) {
-    New-Item -Path "C:\Logs" -ItemType Directory
-}
-
-if (-not (Test-Path `$downloadDirectory)) {
-    New-Item -Path `$downloadDirectory -ItemType Directory
-}
-
-# Función para escribir en el log
-function Write-Log {
-    param ([string]`$Message)
-    `$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    `$logMessage = "`$timestamp - `$Message"
-    Add-Content -Path `$logFile -Value `$logMessage
-}
-
-# Función para deshabilitar el proxy
-function Disable-Proxy {
-    try {
-        Write-Log "Intentando deshabilitar el proxy..."
-
-        # Ruta de la configuración del proxy en el registro
-        `$proxySettingsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
-
-        # Verificar si la clave del proxy existe
-        if (-not (Test-Path `$proxySettingsPath)) {
-            Write-Log "La clave del registro para la configuración del proxy no existe."
-            return `$false
+            Write-Log "Intento $i de ${retryCount}: Instalando el proveedor de NuGet..."
+            # Instalar NuGet sin preguntar al usuario
+            Install-PackageProvider -Name NuGet -Force -Scope AllUsers -ErrorAction Stop
+            Write-Log "Proveedor de NuGet instalado correctamente."
+            return $true
+        } catch {
+            Write-Log "Error en el intento $i de ${retryCount}: $_"
+            if ($i -lt $retryCount) {
+                Start-Sleep -Seconds $retryDelay
+            } else {
+                Write-Log "No se pudo instalar el proveedor de NuGet después de ${retryCount} intentos. Continuando con el proceso..."
+                return $false  # Devuelve false pero no detiene el script
+            }
         }
+    }
+}
 
-        # Obtener la configuración actual del proxy
-        `$proxySettings = Get-ItemProperty -Path `$proxySettingsPath -Name ProxyEnable, AutoConfigURL -ErrorAction SilentlyContinue
+# Función para instalar el módulo PSWindowsUpdate
+function Install-PSWindowsUpdateModule {
+    if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
+        Write-Log "El módulo PSWindowsUpdate no está instalado. Instalándolo..."
+        try {
+            if (-not (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+                Write-Log "Registrando el repositorio PSGallery..."
+                Register-PSRepository -Default
+            }
+            Install-Module -Name PSWindowsUpdate -Force -Scope CurrentUser -AllowClobber -ErrorAction Stop
+            Write-Log "Módulo PSWindowsUpdate instalado correctamente."
+        } catch {
+            Write-Log "Error al instalar el módulo PSWindowsUpdate: $_"
+            return $false
+        }
+    } else {
+        Write-Log "El módulo PSWindowsUpdate ya está instalado."
+    }
+    Import-Module PSWindowsUpdate -ErrorAction SilentlyContinue
+    return $true
+}
 
-        # Mostrar la configuración actual del proxy
-        Write-Log "Configuración actual del proxy:"
-        Write-Log "  ProxyEnable: `$(`$proxySettings.ProxyEnable)"
-        Write-Log "  AutoConfigURL: `$(`$proxySettings.AutoConfigURL)"
-
-        # Deshabilitar el proxy
-        Write-Log "Deshabilitando el proxy..."
-        Set-ItemProperty -Path `$proxySettingsPath -Name ProxyEnable -Value 0
-
-        # Deshabilitar el script de configuración automática (PAC)
-        Write-Log "Deshabilitando el script de configuración automática (PAC)..."
-        Set-ItemProperty -Path `$proxySettingsPath -Name AutoConfigURL -Value ""
-
-        # Verificar explícitamente si el proxy y el PAC se desactivaron correctamente
-        `$proxySettingsAfter = Get-ItemProperty -Path `$proxySettingsPath -Name ProxyEnable, AutoConfigURL -ErrorAction SilentlyContinue
-        Write-Log "Configuración del proxy después de la desactivación:"
-        Write-Log "  ProxyEnable: `$(`$proxySettingsAfter.ProxyEnable)"
-        Write-Log "  AutoConfigURL: `$(`$proxySettingsAfter.AutoConfigURL)"
-
-        if (`$proxySettingsAfter.ProxyEnable -eq 0 -and [string]::IsNullOrEmpty(`$proxySettingsAfter.AutoConfigURL)) {
-            Write-Log "Proxy y PAC deshabilitados correctamente."
-            return `$true
+# Función para buscar actualizaciones de Windows
+function Get-WindowsUpdates {
+    Write-Log "Buscando actualizaciones disponibles..."
+    try {
+        $updates = Get-WindowsUpdate -ErrorAction Stop
+        if ($updates) {
+            Write-Log "Se encontraron actualizaciones disponibles:"
+            $updates | ForEach-Object { Write-Log " - $($_.Title)" }
+            return "UpdatesInstalled"
         } else {
-            Write-Log "Error: No se pudo deshabilitar el proxy o el PAC."
-            return `$false
+            Write-Log "No hay actualizaciones disponibles."
+            return "NoUpdates"
         }
     } catch {
-        Write-Log "Error al deshabilitar el proxy: `$_"
-        return `$false
+        Write-Log "Error al buscar actualizaciones: $_"
+        return "Error"
     }
 }
 
-# Función principal para ejecutar el proceso
-function Start-WindowsUpdateProcess {
-    Write-Log "Inicio del proceso de actualización"
-
-    # Deshabilitar el proxy
-    `$proxyDisabled = Disable-Proxy
-
-    if (-not `$proxyDisabled) {
-        Write-Log "No se pudo deshabilitar el proxy. Abortando el proceso."
-        exit 1
-    }
-
-    Write-Log "Proceso completado. El proxy se ha deshabilitado correctamente."
-}
-
-# Llamada a la función principal para iniciar el proceso
-Start-WindowsUpdateProcess
-"@
-
-        # Crear el archivo del script
-        Set-Content -Path $ScriptPath -Value $scriptContent
-        Write-Log "Script de desbloqueo del proxy creado correctamente en $ScriptPath."
-        return $true
-    } catch {
-        Write-Log "Error al crear el script de desbloqueo del proxy: $_"
-        return $false
-    }
-}
-
-# Función para crear una tarea programada que se ejecute después del reinicio
-function Create-ScheduledTask {
-    param (
-        [string]$ScriptPath,
-        [string]$TaskName
+# Función para verificar si Java está instalado
+function Check-JavaInstalled {
+    $javaPaths = @(
+        "${env:ProgramFiles}\Java\*",
+        "${env:ProgramFiles(x86)}\Java\*"
     )
-    try {
-        Write-Log "Creando tarea programada para desbloquear el proxy después del reinicio..."
+    foreach ($path in $javaPaths) {
+        if (Test-Path $path) {
+            try {
+                $javaExePath = Get-ChildItem -Path $path -Recurse -Filter "java.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+                if ($javaExePath) {
+                    $javaVersion = & "$javaExePath" -version 2>&1 | Select-String -Pattern "version" | ForEach-Object { $_.ToString().Split()[2].Trim('"') }
+                    Write-Log "Java está instalado. Versión: $javaVersion"
+                    return $javaVersion
+                }
+            } catch {
+                Write-Log "No se pudo obtener la versión de Java: $_"
+                return $null
+            }
+        }
+    }
+    Write-Log "Java no está instalado."
+    return $null
+}
 
-        # Crear la tarea programada
-        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-File `"$ScriptPath`""
-        $trigger = New-ScheduledTaskTrigger -AtStartup
-        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -User "SYSTEM" -RunLevel Highest
+# Función para actualizar Java
+function Update-Java {
+    Write-Log "Iniciando la verificación de Java..."
+    $javaVersionBefore = Check-JavaInstalled
+    if (-not $javaVersionBefore) {
+        Write-Log "Java no está instalado. No se realizará ninguna acción."
+        return "NotInstalled"
+    } else {
+        Write-Log "Java está instalado. Versión actual: $javaVersionBefore"
+    }
 
-        Write-Log "Tarea programada creada correctamente."
-        return $true
-    } catch {
-        Write-Log "Error al crear la tarea programada: $_"
-        return $false
+    $javaUrl = "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=248242_ce59cff5c23f4e2eaf4e778a117d4c5b"
+    $installerPath = "$downloadDirectory\JavaInstaller.exe"
+    if (-not (Download-File -Url $javaUrl -Destination $installerPath)) {
+        return "DownloadFailed"
+    }
+
+    if (Test-Path $installerPath) {
+        Write-Log "Actualizando Java..."
+        try {
+            Start-Process -FilePath $installerPath -ArgumentList "/s" -Wait -ErrorAction Stop
+            $javaVersionAfter = Check-JavaInstalled
+            Write-Log "Java ha sido actualizado correctamente. Nueva versión: $javaVersionAfter"
+            return $javaVersionAfter
+        } catch {
+            Write-Log "Error al actualizar Java: $_"
+            return "InstallFailed"
+        }
+    } else {
+        Write-Log "Error: No se pudo descargar el instalador de Java."
+        return "DownloadFailed"
+    }
+}
+
+# Función para verificar si Firefox está instalado
+function Check-FirefoxInstalled {
+    $firefoxPaths = @(
+        "${env:ProgramFiles}\Mozilla Firefox\firefox.exe",
+        "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"
+    )
+    foreach ($path in $firefoxPaths) {
+        if (Test-Path $path) {
+            try {
+                $versionInfo = (Get-Item $path).VersionInfo
+                $firefoxVersion = $versionInfo.ProductVersion
+                Write-Log "Firefox está instalado. Versión: $firefoxVersion"
+                return $firefoxVersion
+            } catch {
+                Write-Log "No se pudo obtener la versión de Firefox: $_"
+                return $null
+            }
+        }
+    }
+    Write-Log "Firefox no está instalado."
+    return $null
+}
+
+# Función para actualizar Firefox
+function Update-Firefox {
+    Write-Log "Iniciando la verificación de Firefox..."
+    $firefoxVersionBefore = Check-FirefoxInstalled
+    if (-not $firefoxVersionBefore) {
+        Write-Log "Firefox no está instalado. No se realizará ninguna acción."
+        return "NotInstalled"
+    } else {
+        Write-Log "Firefox está instalado. Versión actual: $firefoxVersionBefore"
+    }
+
+    $firefoxDownloadUrl = "https://download.mozilla.org/?product=firefox-latest&os=win64&lang=es-ES"
+    $installerPath = "$downloadDirectory\Firefox_Installer.exe"
+    if (-not (Download-File -Url $firefoxDownloadUrl -Destination $installerPath)) {
+        return "DownloadFailed"
+    }
+
+    if (Test-Path $installerPath) {
+        Write-Log "Actualizando Firefox..."
+        try {
+            Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait -ErrorAction Stop
+            $firefoxVersionAfter = Check-FirefoxInstalled
+            Write-Log "Firefox ha sido actualizado correctamente. Nueva versión: $firefoxVersionAfter"
+            return $firefoxVersionAfter
+        } catch {
+            Write-Log "Error al actualizar Firefox: $_"
+            return "InstallFailed"
+        }
+    } else {
+        Write-Log "Error: No se pudo descargar el instalador de Firefox."
+        return "DownloadFailed"
+    }
+}
+
+# Función para verificar si FileZilla está instalado
+function Check-FileZillaInstalled {
+    $filezillaPaths = @(
+        "${env:ProgramFiles}\FileZilla FTP Client\filezilla.exe",
+        "${env:ProgramFiles(x86)}\FileZilla FTP Client\filezilla.exe"
+    )
+    foreach ($path in $filezillaPaths) {
+        if (Test-Path $path) {
+            try {
+                $versionInfo = (Get-Item $path).VersionInfo
+                $filezillaVersion = $versionInfo.ProductVersion
+                Write-Log "FileZilla está instalado. Versión: $filezillaVersion"
+                return $filezillaVersion
+            } catch {
+                Write-Log "No se pudo obtener la versión de FileZilla: $_"
+                return $null
+            }
+        }
+    }
+    Write-Log "FileZilla no está instalado."
+    return $null
+}
+
+# Función para actualizar FileZilla
+function Update-FileZilla {
+    Write-Log "Iniciando la verificación de FileZilla..."
+    $filezillaVersionBefore = Check-FileZillaInstalled
+    if (-not $filezillaVersionBefore) {
+        Write-Log "FileZilla no está instalado. No se realizará ninguna acción."
+        return "NotInstalled"
+    } else {
+        Write-Log "FileZilla está instalado. Versión actual: $filezillaVersionBefore"
+    }
+
+    $filezillaDownloadUrl = "https://download.filezilla-project.org/client/FileZilla_3.x.x_win64-setup.exe"
+    $installerPath = "$downloadDirectory\FileZilla_Installer.exe"
+    if (-not (Download-File -Url $filezillaDownloadUrl -Destination $installerPath)) {
+        return "DownloadFailed"
+    }
+
+    if (Test-Path $installerPath) {
+        Write-Log "Actualizando FileZilla..."
+        try {
+            Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait -ErrorAction Stop
+            $filezillaVersionAfter = Check-FileZillaInstalled
+            Write-Log "FileZilla ha sido actualizado correctamente. Nueva versión: $filezillaVersionAfter"
+            return $filezillaVersionAfter
+        } catch {
+            Write-Log "Error al actualizar FileZilla: $_"
+            return "InstallFailed"
+        }
+    } else {
+        Write-Log "Error: No se pudo descargar el instalador de FileZilla."
+        return "DownloadFailed"
+    }
+}
+
+# Función para verificar si LibreOffice está instalado
+function Check-LibreOfficeInstalled {
+    $libreofficePaths = @(
+        "${env:ProgramFiles}\LibreOffice\program\soffice.exe",
+        "${env:ProgramFiles(x86)}\LibreOffice\program\soffice.exe"
+    )
+    foreach ($path in $libreofficePaths) {
+        if (Test-Path $path) {
+            try {
+                $versionInfo = (Get-Item $path).VersionInfo
+                $libreofficeVersion = $versionInfo.ProductVersion
+                Write-Log "LibreOffice está instalado. Versión: $libreofficeVersion"
+                return $libreofficeVersion
+            } catch {
+                Write-Log "No se pudo obtener la versión de LibreOffice: $_"
+                return $null
+            }
+        }
+    }
+    Write-Log "LibreOffice no está instalado."
+    return $null
+}
+
+# Función para actualizar LibreOffice
+function Update-LibreOffice {
+    Write-Log "Iniciando la verificación de LibreOffice..."
+    $libreofficeVersionBefore = Check-LibreOfficeInstalled
+    if (-not $libreofficeVersionBefore) {
+        Write-Log "LibreOffice no está instalado. No se realizará ninguna acción."
+        return "NotInstalled"
+    } else {
+        Write-Log "LibreOffice está instalado. Versión actual: $libreofficeVersionBefore"
+    }
+
+    $libreofficeDownloadUrl = "https://download.documentfoundation.org/libreoffice/stable/25.2.1/win/x86_64/LibreOffice_25.2.1_Win_x86-64.msi"
+    $installerPath = "$downloadDirectory\LibreOffice_Installer.msi"
+    if (-not (Download-File -Url $libreofficeDownloadUrl -Destination $installerPath)) {
+        return "DownloadFailed"
+    }
+
+    if (Test-Path $installerPath) {
+        Write-Log "Actualizando LibreOffice..."
+        try {
+            Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$installerPath`" /quiet /norestart" -Wait -NoNewWindow
+            $libreofficeVersionAfter = Check-LibreOfficeInstalled
+            Write-Log "LibreOffice ha sido actualizado correctamente. Nueva versión: $libreofficeVersionAfter"
+            return $libreofficeVersionAfter
+        } catch {
+            Write-Log "Error al actualizar LibreOffice: $_"
+            return "InstallFailed"
+        }
+    } else {
+        Write-Log "Error: No se pudo descargar el instalador de LibreOffice."
+        return "DownloadFailed"
+    }
+}
+
+# Función para verificar si WinRAR está instalado
+function Check-WinRARInstalled {
+    $winrarPaths = @(
+        "${env:ProgramFiles}\WinRAR\WinRAR.exe",
+        "${env:ProgramFiles(x86)}\WinRAR\WinRAR.exe"
+    )
+    foreach ($path in $winrarPaths) {
+        if (Test-Path $path) {
+            try {
+                $versionInfo = (Get-Item $path).VersionInfo
+                $winrarVersion = $versionInfo.ProductVersion
+                Write-Log "WinRAR está instalado. Versión: $winrarVersion"
+                return $winrarVersion
+            } catch {
+                Write-Log "No se pudo obtener la versión de WinRAR: $_"
+                return $null
+            }
+        }
+    }
+    Write-Log "WinRAR no está instalado."
+    return $null
+}
+
+# Función para actualizar WinRAR
+function Update-WinRAR {
+    Write-Log "Iniciando la verificación de WinRAR..."
+    $winrarVersionBefore = Check-WinRARInstalled
+    if (-not $winrarVersionBefore) {
+        Write-Log "WinRAR no está instalado. No se realizará ninguna acción."
+        return "NotInstalled"
+    } else {
+        Write-Log "WinRAR está instalado. Versión actual: $winrarVersionBefore"
+    }
+
+    $winrarDownloadUrl = "https://www.win-rar.com/fileadmin/winrar-versions/winrar/winrar-x64-624.exe"
+    $installerPath = "$downloadDirectory\WinRAR_Installer.exe"
+    if (-not (Download-File -Url $winrarDownloadUrl -Destination $installerPath)) {
+        return "DownloadFailed"
+    }
+
+    if (Test-Path $installerPath) {
+        Write-Log "Actualizando WinRAR..."
+        try {
+            Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait -ErrorAction Stop
+            $winrarVersionAfter = Check-WinRARInstalled
+            Write-Log "WinRAR ha sido actualizado correctamente. Nueva versión: $winrarVersionAfter"
+            return $winrarVersionAfter
+        } catch {
+            Write-Log "Error al actualizar WinRAR: $_"
+            return "InstallFailed"
+        }
+    } else {
+        Write-Log "Error: No se pudo descargar el instalador de WinRAR."
+        return "DownloadFailed"
+    }
+}
+
+# Función para verificar si Forcepoint está instalado
+function Check-ForcepointInstalled {
+    $forcepointPath = "C:\Program Files\Websense\Websense Endpoint\F1EUI.exe"
+    if (Test-Path $forcepointPath) {
+        try {
+            $versionInfo = (Get-Item $forcepointPath).VersionInfo
+            $forcepointVersion = $versionInfo.ProductVersion
+            Write-Log "Forcepoint está instalado. Versión: $forcepointVersion"
+            return $forcepointVersion
+        } catch {
+            Write-Log "No se pudo obtener la versión de Forcepoint: $_"
+            return $null
+        }
+    } else {
+        Write-Log "Forcepoint no está instalado."
+        return $null
+    }
+}
+
+function Update-Forcepoint {
+    Write-Log "Iniciando la verificación de Forcepoint..."
+    $forcepointVersionBefore = Check-ForcepointInstalled
+    if (-not $forcepointVersionBefore) {
+        Write-Log "Forcepoint no está instalado. No se realizará ninguna acción."
+        return "NotInstalled"
+    } else {
+        Write-Log "Forcepoint está instalado. Versión actual: $forcepointVersionBefore"
+    }
+
+    # Verificar si ya está en la versión más reciente (25.03.5710)
+    if ($forcepointVersionBefore -eq "25.03.5710") {
+        Write-Log "Forcepoint ya está en la versión más reciente (25.03.5710). No es necesario actualizar."
+        return "AlreadyUpdated"
+    }
+
+    $forcepointDownloadUrl = "https://data.rafalan.pro/web/client/pubshares/pLyTPKDEYEGEadV7wRzzui?compress=false"
+    $installerPath = "$env:TEMP\FORCEPOINT-ONE-ENDPOINT-x64_Windows11.exe"
+
+    # Hash SHA256 conocido del archivo (debes obtener este valor del archivo original)
+    $expectedHash = "05E661F86AF1DE781315360CCB99CEF444D8946CA4C00F7D73522315D8FC7911"
+
+    # Verificar si el archivo ya existe en la carpeta de descargas
+    if (Test-Path $installerPath) {
+        Write-Log "El instalador de Forcepoint ya existe en $installerPath. Verificando integridad del archivo..."
+        
+        # Calcular el hash del archivo existente
+        $fileHash = Get-FileHash -Path $installerPath -Algorithm SHA256 | Select-Object -ExpandProperty Hash
+        Write-Log "Hash del archivo descargado: $fileHash"
+
+        # Comparar el hash del archivo con el hash conocido
+        if ($fileHash -eq $expectedHash) {
+            Write-Log "El archivo está íntegro. No es necesario descargarlo nuevamente."
+        } else {
+            Write-Log "El archivo está corrupto. Eliminando y descargando nuevamente..."
+            Remove-Item -Path $installerPath -Force
+        }
+    }
+
+    # Si el archivo no existe o fue eliminado por estar corrupto, descargarlo nuevamente
+    if (-not (Test-Path $installerPath)) {
+        Write-Log "El instalador de Forcepoint no existe. Descargando..."
+        try {
+            Invoke-WebRequest -Uri $forcepointDownloadUrl -OutFile $installerPath
+            Write-Log "Instalador descargado correctamente en: $installerPath"
+
+            # Verificar el hash del archivo descargado
+            $fileHash = Get-FileHash -Path $installerPath -Algorithm SHA256 | Select-Object -ExpandProperty Hash
+            Write-Log "Hash del archivo descargado: $fileHash"
+
+            if ($fileHash -eq $expectedHash) {
+                Write-Log "El archivo está íntegro. Procediendo con la instalación."
+            } else {
+                Write-Log "Error: El archivo descargado está corrupto (hash no coincide)."
+                return "DownloadCorrupted"
+            }
+        } catch {
+            Write-Log "Error al descargar el instalador de Forcepoint: $_"
+            return "DownloadFailed"
+        }
+    }
+
+    # Verificar nuevamente si el archivo existe antes de proceder con la instalación
+    if (Test-Path $installerPath) {
+        Write-Log "Actualizando Forcepoint..."
+        try {
+            # Ejecutar la instalación silenciosa sin reiniciar
+            Start-Process -FilePath $installerPath -ArgumentList '/v"/qn /norestart"' -Wait -NoNewWindow
+            Write-Log "Instalación silenciosa de Forcepoint completada."
+            
+            # Verificar la versión después de la instalación
+            $forcepointVersionAfter = Check-ForcepointInstalled
+            Write-Log "Forcepoint ha sido actualizado correctamente. Nueva versión: $forcepointVersionAfter"
+            return $forcepointVersionAfter
+        } catch {
+            Write-Log "Error al actualizar Forcepoint: $_"
+            return "InstallFailed"
+        }
+    } else {
+        Write-Log "Error: No se pudo descargar o verificar el instalador de Forcepoint."
+        return "DownloadFailed"
     }
 }
 
@@ -283,6 +676,23 @@ function Upload-ToNocoDB {
         [string]$Hostname,
         [string]$Status,
         [string]$Description,
+        [string]$WindowsUpdateStatus,
+        [string]$JavaVersionBefore,
+        [string]$JavaVersionAfter,
+        [string]$FirefoxVersionBefore,
+        [string]$FirefoxVersionAfter,
+        [string]$LibreOfficeVersionBefore,
+        [string]$LibreOfficeVersionAfter,
+        [string]$LibreOfficeStatus,
+        [string]$FileZillaVersionBefore,
+        [string]$FileZillaVersionAfter,
+        [string]$FileZillaStatus,
+        [string]$WinRARVersionBefore,
+        [string]$WinRARVersionAfter,
+        [string]$WinRARStatus,
+        [string]$ForcepointVersionBefore,
+        [string]$ForcepointVersionAfter,
+        [string]$ForcepointStatus,
         [string]$ProxyDisabled
     )
 
@@ -296,6 +706,23 @@ function Upload-ToNocoDB {
         Hostname = $Hostname
         Status = $Status
         Description = $Description
+        WindowsUpdateStatus = $WindowsUpdateStatus
+        JavaVersionBefore = $JavaVersionBefore
+        JavaVersionAfter = $JavaVersionAfter
+        FirefoxVersionBefore = $FirefoxVersionBefore
+        FirefoxVersionAfter = $FirefoxVersionAfter
+        LibreOfficeVersionBefore = $LibreOfficeVersionBefore
+        LibreOfficeVersionAfter = $LibreOfficeVersionAfter
+        LibreOfficeStatus = $LibreOfficeStatus
+        FileZillaVersionBefore = $FileZillaVersionBefore
+        FileZillaVersionAfter = $FileZillaVersionAfter
+        FileZillaStatus = $FileZillaStatus
+        WinRARVersionBefore = $WinRARVersionBefore
+        WinRARVersionAfter = $WinRARVersionAfter
+        WinRARStatus = $WinRARStatus
+        ForcepointVersionBefore = $ForcepointVersionBefore
+        ForcepointVersionAfter = $ForcepointVersionAfter
+        ForcepointStatus = $ForcepointStatus
         ProxyDisabled = $ProxyDisabled
     } | ConvertTo-Json
 
@@ -314,74 +741,146 @@ function Upload-ToNocoDB {
     }
 }
 
+# Función para eliminar la tarea programada
+function Remove-ScheduledTask {
+    try {
+        Write-Log "Eliminando la tarea programada '$taskName'..."
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction Stop
+        Write-Log "Tarea programada '$taskName' eliminada correctamente."
+        return $true
+    } catch {
+        Write-Log "Error al eliminar la tarea programada '$taskName': $_"
+        return $false
+    }
+}
+
+# Función para eliminar el archivo del script
+function Remove-ScriptFile {
+    try {
+        Write-Log "Eliminando el archivo del script en '$scriptPath'..."
+        if (Test-Path $scriptPath) {
+            Remove-Item -Path $scriptPath -Force -ErrorAction Stop
+            Write-Log "Archivo del script en '$scriptPath' eliminado correctamente."
+            return $true
+        } else {
+            Write-Log "El archivo del script en '$scriptPath' no existe."
+            return $false
+        }
+    } catch {
+        Write-Log "Error al eliminar el archivo del script en '$scriptPath': $_"
+        return $false
+    }
+}
+
 # Función principal para ejecutar el proceso
-function Start-UpdateProcess {
+function Start-WindowsUpdateProcess {
     Write-Log "Inicio del proceso de actualización"
 
-    # Obtener información del sistema
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $hostname = $env:COMPUTERNAME
+    # Verificar privilegios de administrador
+    Check-AdminPrivileges
 
-    # Obtener la versión actual de Forcepoint
-    $previousVersion = Get-ForcepointVersion
-    if ($previousVersion) {
-        Write-Log "Versión actual de Forcepoint: $previousVersion"
-        
-        # Verificar si la versión actual es la 25.03.5710
-        if ($previousVersion -eq "25.03.5710") {
-            Write-Log "La versión actual de Forcepoint es la 25.03.5710, no es necesario actualizar."
-        } else {
-            # Descargar el instalador (si no existe)
-            $installerPath = Download-Installer
-            if (-not $installerPath) {
-                Write-Log "No se pudo descargar el instalador. Abortando el proceso."
-                exit 1
-            }
+    # Intentar instalar el proveedor de NuGet
+    $nugetInstalled = Install-NuGetProvider
+    if (-not $nugetInstalled) {
+        Write-Log "Advertencia: No se pudo instalar el proveedor de NuGet. Continuando con el proceso..."
+    }
 
-            # Instalar el paquete de Forcepoint en modo silencioso sin reinicio
-            $installationSuccess = Install-Forcepoint -InstallerPath $installerPath
-            if (-not $installationSuccess) {
-                Write-Log "No se pudo instalar el paquete de Forcepoint. Abortando el proceso."
-                exit 1
-            }
-        }
+    # Actualizar Forcepoint
+    $forcepointVersionBefore = Check-ForcepointInstalled
+    if ($forcepointVersionBefore) {
+        $forcepointVersionAfter = Update-Forcepoint
     } else {
-        Write-Log "No se pudo obtener la versión actual de Forcepoint."
+        $forcepointVersionAfter = "NotInstalled"
     }
 
-    # Deshabilitar el proxy si está habilitado
-    $proxyDisabled = Disable-Proxy
-    if (-not $proxyDisabled) {
-        Write-Log "No se pudo deshabilitar el proxy. Abortando el proceso."
-        exit 1
+    # Deshabilitar el proxy
+    Disable-Proxy
+
+    # Instalar el proveedor de NuGet y el módulo PSWindowsUpdate
+    Install-NuGetProvider
+    Install-PSWindowsUpdateModule
+
+    # Buscar e instalar actualizaciones de Windows
+    $windowsUpdateStatus = Get-WindowsUpdates
+
+    # Actualizar Java
+    $javaVersionBefore = Check-JavaInstalled
+    if ($javaVersionBefore) {
+        $javaVersionAfter = Update-Java
+    } else {
+        $javaVersionAfter = "NotInstalled"
     }
 
-    # Crear el script de desbloqueo del proxy
-    $scriptCreated = Create-DisableProxyScript -ScriptPath $scriptPath -PreviousVersion $previousVersion
-    if (-not $scriptCreated) {
-        Write-Log "No se pudo crear el script de desbloqueo del proxy. Abortando el proceso."
-        exit 1
+    # Actualizar Firefox
+    $firefoxVersionBefore = Check-FirefoxInstalled
+    if ($firefoxVersionBefore) {
+        $firefoxVersionAfter = Update-Firefox
+    } else {
+        $firefoxVersionAfter = "NotInstalled"
     }
 
-    # Crear una tarea programada para ejecutar el script después del reinicio
-    $taskCreated = Create-ScheduledTask -ScriptPath $scriptPath -TaskName $taskName
-    if (-not $taskCreated) {
-        Write-Log "No se pudo crear la tarea programada. Abortando el proceso."
-        exit 1
+    # Actualizar LibreOffice
+    $libreofficeVersionBefore = Check-LibreOfficeInstalled
+    if ($libreofficeVersionBefore) {
+        $libreofficeVersionAfter = Update-LibreOffice
+    } else {
+        $libreofficeVersionAfter = "NotInstalled"
+    }
+
+    # Actualizar FileZilla
+    $filezillaVersionBefore = Check-FileZillaInstalled
+    if ($filezillaVersionBefore) {
+        $filezillaVersionAfter = Update-FileZilla
+    } else {
+        $filezillaVersionAfter = "NotInstalled"
+    }
+
+    # Actualizar WinRAR
+    $winrarVersionBefore = Check-WinRARInstalled
+    if ($winrarVersionBefore) {
+        $winrarVersionAfter = Update-WinRAR
+    } else {
+        $winrarVersionAfter = "NotInstalled"
     }
 
     # Enviar datos a NocoDB
-    $status = if ($proxyDisabled) { "Success" } else { "Error" }
-    $proxyDisabledStatus = if ($proxyDisabled) { "Yes" } else { "No" }
-    Upload-ToNocoDB -Timestamp $timestamp `
-                    -Hostname $hostname `
-                    -Status $status `
-                    -Description "Proceso de actualización y desactivación del proxy completado." `
-                    -ProxyDisabled $proxyDisabledStatus
+    Upload-ToNocoDB -Timestamp (Get-Date -Format "yyyy-MM-dd HH:mm:ss") `
+                    -Hostname $env:COMPUTERNAME `
+                    -Status "Success" `
+                    -Description "Proceso de actualización completado." `
+                    -WindowsUpdateStatus $windowsUpdateStatus `
+                    -JavaVersionBefore $javaVersionBefore `
+                    -JavaVersionAfter $javaVersionAfter `
+                    -FirefoxVersionBefore $firefoxVersionBefore `
+                    -FirefoxVersionAfter $firefoxVersionAfter `
+                    -LibreOfficeVersionBefore $libreofficeVersionBefore `
+                    -LibreOfficeVersionAfter $libreofficeVersionAfter `
+                    -LibreOfficeStatus $libreofficeVersionAfter `
+                    -FileZillaVersionBefore $filezillaVersionBefore `
+                    -FileZillaVersionAfter $filezillaVersionAfter `
+                    -FileZillaStatus $filezillaVersionAfter `
+                    -WinRARVersionBefore $winrarVersionBefore `
+                    -WinRARVersionAfter $winrarVersionAfter `
+                    -WinRARStatus $winrarVersionAfter `
+                    -ForcepointVersionBefore $forcepointVersionBefore `
+                    -ForcepointVersionAfter $forcepointVersionAfter `
+                    -ForcepointStatus $forcepointVersionAfter `
+                    -ProxyDisabled "Yes"
 
-    Write-Log "Proceso completado. El proxy se ha deshabilitado correctamente."
-    exit 0
+    Write-Log "Proceso completado."
+
+    # Eliminar la tarea programada
+    $taskRemoved = Remove-ScheduledTask
+    if (-not $taskRemoved) {
+        Write-Log "Advertencia: No se pudo eliminar la tarea programada."
+    }
+
+    # Eliminar el archivo del script
+    $scriptRemoved = Remove-ScriptFile
+    if (-not $scriptRemoved) {
+        Write-Log "Advertencia: No se pudo eliminar el archivo del script."
+    }
 }
 
-# Llamada a la función principal para iniciar el proceso
-Start-UpdateProcess
+# Llamada a la función principal
+Start-WindowsUpdateProcess
