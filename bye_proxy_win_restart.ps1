@@ -45,14 +45,6 @@ function Download-File {
     }
 }
 
-# Crear directorios si no existen
-if (-not (Test-Path "C:\Logs")) {
-    New-Item -Path "C:\Logs" -ItemType Directory -Force
-}
-
-if (-not (Test-Path (Split-Path -Path $scriptPath -Parent))) {
-    New-Item -Path (Split-Path -Path $scriptPath -Parent) -ItemType Directory -Force
-}
 
 # Función para escribir en el log
 function Write-Log {
@@ -308,20 +300,25 @@ function Check-JavaInstalled {
     foreach ($path in $javaPaths) {
         if (Test-Path $path) {
             try {
-                # Buscar JRE (java.exe)
-                $javaExePath = Get-ChildItem -Path $path -Recurse -Filter "java.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-                if ($javaExePath) {
-                    $javaVersion = & "$javaExePath" -version 2>&1 | Select-String -Pattern "version" | ForEach-Object { $_.ToString().Split()[2].Trim('"') }
-                    Write-Log "JRE está instalado. Versión: $javaVersion"
-                    $javaInfo.JRE = $javaVersion
-                }
+                # Obtener todas las carpetas de Java, excluyendo enlaces simbólicos (accesos directos)
+                $javaFolders = Get-ChildItem -Path $path -Directory | Where-Object { $_.LinkType -ne "SymbolicLink" }
 
-                # Buscar JDK (javac.exe)
-                $javacExePath = Get-ChildItem -Path $path -Recurse -Filter "javac.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-                if ($javacExePath) {
-                    $jdkVersion = & "$javacExePath" -version 2>&1 | Select-String -Pattern "javac" | ForEach-Object { $_.ToString().Split()[1].Trim('"') }
-                    Write-Log "JDK está instalado. Versión: $jdkVersion"
-                    $javaInfo.JDK = $jdkVersion
+                foreach ($folder in $javaFolders) {
+                    # Buscar JRE (java.exe)
+                    $javaExePath = Get-ChildItem -Path $folder.FullName -Recurse -Filter "java.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+                    if ($javaExePath) {
+                        $javaVersion = & "$javaExePath" -version 2>&1 | Select-String -Pattern "version" | ForEach-Object { $_.ToString().Split()[2].Trim('"') }
+                        Write-Log "JRE está instalado. Versión: $javaVersion en $($folder.FullName)"
+                        $javaInfo.JRE = $javaVersion
+                    }
+
+                    # Buscar JDK (javac.exe)
+                    $javacExePath = Get-ChildItem -Path $folder.FullName -Recurse -Filter "javac.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+                    if ($javacExePath) {
+                        $jdkVersion = & "$javacExePath" -version 2>&1 | Select-String -Pattern "javac" | ForEach-Object { $_.ToString().Split()[1].Trim('"') }
+                        Write-Log "JDK está instalado. Versión: $jdkVersion en $($folder.FullName)"
+                        $javaInfo.JDK = $jdkVersion
+                    }
                 }
             } catch {
                 Write-Log "No se pudo obtener la versión de Java: $_"
@@ -336,7 +333,26 @@ function Check-JavaInstalled {
     return $javaInfo
 }
 
-# Función para actualizar Java (JRE o JDK)
+# Función para escribir logs (simulada)
+function Write-Log {
+    param (
+        [string]$Message
+    )
+    Write-Host $Message
+}
+
+# Ejemplo de uso
+$javaInfo = Check-JavaInstalled
+if ($javaInfo.JRE) {
+    Write-Host "JRE instalado. Versión: $($javaInfo.JRE)"
+}
+if ($javaInfo.JDK) {
+    Write-Host "JDK instalado. Versión: $($javaInfo.JDK)"
+}
+if (-not $javaInfo.JRE -and -not $javaInfo.JDK) {
+    Write-Host "Java no está instalado."
+}
+
 function Update-Java {
     Write-Log "Iniciando la verificación de Java..."
     $javaInfoBefore = Check-JavaInstalled
@@ -716,7 +732,6 @@ function Update-Forcepoint {
     }
 }
 
-# Función para enviar datos a NocoDB
 function Upload-ToNocoDB {
     param (
         [string]$Timestamp,
@@ -819,7 +834,6 @@ function Remove-ScriptFile {
     }
 }
 
-# Función principal para ejecutar el proceso
 function Start-WindowsUpdateProcess {
     Write-Log "Inicio del proceso de actualización"
 
@@ -851,11 +865,11 @@ function Start-WindowsUpdateProcess {
     $windowsUpdateStatus = Get-WindowsUpdates
 
     # Actualizar Java
-    $javaVersionBefore = Check-JavaInstalled
-    if ($javaVersionBefore) {
-        $javaVersionAfter = Update-Java
+    $javaInfoBefore = Check-JavaInstalled
+    if ($javaInfoBefore.JRE -or $javaInfoBefore.JDK) {
+        $javaInfoAfter = Update-Java
     } else {
-        $javaVersionAfter = "NotInstalled"
+        $javaInfoAfter = @{ JRE = "NotInstalled"; JDK = "NotInstalled" }
     }
 
     # Actualizar Firefox
@@ -889,6 +903,10 @@ function Start-WindowsUpdateProcess {
     } else {
         $winrarVersionAfter = "NotInstalled"
     }
+
+    # Determinar la versión de Java antes y después
+    $javaVersionBefore = if ($javaInfoBefore.JRE) { $javaInfoBefore.JRE } else { $javaInfoBefore.JDK }
+    $javaVersionAfter = if ($javaInfoAfter.JRE) { $javaInfoAfter.JRE } else { $javaInfoAfter.JDK }
 
     # Enviar datos a NocoDB
     Upload-ToNocoDB -Timestamp (Get-Date -Format "yyyy-MM-dd HH:mm:ss") `
@@ -928,6 +946,5 @@ function Start-WindowsUpdateProcess {
         Write-Log "Advertencia: No se pudo eliminar el archivo del script."
     }
 }
-
 # Llamada a la función principal
 Start-WindowsUpdateProcess
