@@ -4,8 +4,8 @@ $nocodbUrl = "http://cc.nocodb.rafalan.pro/api/v2/tables/mqjbstu0hppfnkp/records
 $token = "BF4KTVGn6We-R0gc3zl0gwmMMXDVafoEdsAaGRT3"
 $downloadDirectory = "C:\Downloads"
 $restartFlagPath = "C:\Scripts\restart_flag.txt"
-$scriptPath = "C:\Scripts\WindowsUpdateProcess1.ps1"  # Ruta donde se guardará el script clonado
-$taskName = "WindowsUpdateProcess-test1007"
+$scriptPath = "C:\Scripts\WindowsUpdateProcess.ps1"  # Ruta donde se guardará el script clonado
+$taskName = "WindowsUpdateProcess-BT"
 
 # Crear directorios si no existen
 if (-not (Test-Path "C:\Logs")) {
@@ -24,11 +24,26 @@ function Write-Log {
     Add-Content -Path $logFile -Value $logMessage
 }
 
-# Configuración inicial
-$logFile = "C:\Logs\update_log.txt"
-$scriptPath = "C:\Scripts\WindowsUpdateProcess.ps1"  # Ruta donde se guardará el script clonado
-$restartFlagPath = "C:\Scripts\restart_flag.txt"
-$taskName = "WindowsUpdateProcess-test1007"
+# Función para descargar archivos
+function Download-File {
+    param (
+        [string]$Url,
+        [string]$Destination
+    )
+    if (Test-Path $Destination) {
+        Write-Log "El archivo ya existe en $Destination. No es necesario descargarlo."
+        return $true
+    }
+    Write-Log "Descargando archivo desde $Url a $Destination..."
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $Destination -ErrorAction Stop
+        Write-Log "Descarga completada: $Destination"
+        return $true
+    } catch {
+        Write-Log "Error al descargar el archivo: $_"
+        return $false
+    }
+}
 
 # Crear directorios si no existen
 if (-not (Test-Path "C:\Logs")) {
@@ -279,44 +294,69 @@ function Get-WindowsUpdates {
     }
 }
 
-# Función para verificar si Java está instalado
+# Función para verificar si Java (JRE o JDK) está instalado
 function Check-JavaInstalled {
     $javaPaths = @(
         "${env:ProgramFiles}\Java\*",
         "${env:ProgramFiles(x86)}\Java\*"
     )
+    $javaInfo = @{
+        JRE = $null
+        JDK = $null
+    }
+
     foreach ($path in $javaPaths) {
         if (Test-Path $path) {
             try {
+                # Buscar JRE (java.exe)
                 $javaExePath = Get-ChildItem -Path $path -Recurse -Filter "java.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
                 if ($javaExePath) {
                     $javaVersion = & "$javaExePath" -version 2>&1 | Select-String -Pattern "version" | ForEach-Object { $_.ToString().Split()[2].Trim('"') }
-                    Write-Log "Java está instalado. Versión: $javaVersion"
-                    return $javaVersion
+                    Write-Log "JRE está instalado. Versión: $javaVersion"
+                    $javaInfo.JRE = $javaVersion
+                }
+
+                # Buscar JDK (javac.exe)
+                $javacExePath = Get-ChildItem -Path $path -Recurse -Filter "javac.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+                if ($javacExePath) {
+                    $jdkVersion = & "$javacExePath" -version 2>&1 | Select-String -Pattern "javac" | ForEach-Object { $_.ToString().Split()[1].Trim('"') }
+                    Write-Log "JDK está instalado. Versión: $jdkVersion"
+                    $javaInfo.JDK = $jdkVersion
                 }
             } catch {
                 Write-Log "No se pudo obtener la versión de Java: $_"
-                return $null
             }
         }
     }
-    Write-Log "Java no está instalado."
-    return $null
-}
 
-# Función para actualizar Java
-function Update-Java {
-    Write-Log "Iniciando la verificación de Java..."
-    $javaVersionBefore = Check-JavaInstalled
-    if (-not $javaVersionBefore) {
-        Write-Log "Java no está instalado. No se realizará ninguna acción."
-        return "NotInstalled"
-    } else {
-        Write-Log "Java está instalado. Versión actual: $javaVersionBefore"
+    if (-not $javaInfo.JRE -and -not $javaInfo.JDK) {
+        Write-Log "Java (JRE o JDK) no está instalado."
     }
 
+    return $javaInfo
+}
+
+# Función para actualizar Java (JRE o JDK)
+function Update-Java {
+    Write-Log "Iniciando la verificación de Java..."
+    $javaInfoBefore = Check-JavaInstalled
+
+    if (-not $javaInfoBefore.JRE -and -not $javaInfoBefore.JDK) {
+        Write-Log "Java (JRE o JDK) no está instalado. No se realizará ninguna acción."
+        return "NotInstalled"
+    } else {
+        if ($javaInfoBefore.JRE) {
+            Write-Log "JRE está instalado. Versión actual: $($javaInfoBefore.JRE)"
+        }
+        if ($javaInfoBefore.JDK) {
+            Write-Log "JDK está instalado. Versión actual: $($javaInfoBefore.JDK)"
+        }
+    }
+
+    # URL para descargar el instalador de Java (JRE o JDK)
     $javaUrl = "https://javadl.oracle.com/webapps/download/AutoDL?BundleId=248242_ce59cff5c23f4e2eaf4e778a117d4c5b"
-    $installerPath = "$downloadDirectory\JavaInstaller.exe"
+    $installerPath = "$env:TEMP\JavaInstaller.exe"
+
     if (-not (Download-File -Url $javaUrl -Destination $installerPath)) {
         return "DownloadFailed"
     }
@@ -325,9 +365,16 @@ function Update-Java {
         Write-Log "Actualizando Java..."
         try {
             Start-Process -FilePath $installerPath -ArgumentList "/s" -Wait -ErrorAction Stop
-            $javaVersionAfter = Check-JavaInstalled
-            Write-Log "Java ha sido actualizado correctamente. Nueva versión: $javaVersionAfter"
-            return $javaVersionAfter
+            $javaInfoAfter = Check-JavaInstalled
+
+            if ($javaInfoAfter.JRE) {
+                Write-Log "JRE ha sido actualizado correctamente. Nueva versión: $($javaInfoAfter.JRE)"
+            }
+            if ($javaInfoAfter.JDK) {
+                Write-Log "JDK ha sido actualizado correctamente. Nueva versión: $($javaInfoAfter.JDK)"
+            }
+
+            return $javaInfoAfter
         } catch {
             Write-Log "Error al actualizar Java: $_"
             return "InstallFailed"
@@ -429,7 +476,7 @@ function Update-FileZilla {
         Write-Log "FileZilla está instalado. Versión actual: $filezillaVersionBefore"
     }
 
-    $filezillaDownloadUrl = "https://download.filezilla-project.org/client/FileZilla_3.x.x_win64-setup.exe"
+    $filezillaDownloadUrl = "https://download.filezilla-project.org/client/FileZilla_3.68.1_win64_sponsored2-setup.exe"
     $installerPath = "$downloadDirectory\FileZilla_Installer.exe"
     if (-not (Download-File -Url $filezillaDownloadUrl -Destination $installerPath)) {
         return "DownloadFailed"
@@ -543,7 +590,7 @@ function Update-WinRAR {
         Write-Log "WinRAR está instalado. Versión actual: $winrarVersionBefore"
     }
 
-    $winrarDownloadUrl = "https://www.win-rar.com/fileadmin/winrar-versions/winrar/winrar-x64-624.exe"
+    $winrarDownloadUrl = "https://d.winrar.es/d/101z1742684656/NzcXGt_6ofEBAtD779cFxg/winrar-x64-710.exe"
     $installerPath = "$downloadDirectory\WinRAR_Installer.exe"
     if (-not (Download-File -Url $winrarDownloadUrl -Destination $installerPath)) {
         return "DownloadFailed"
