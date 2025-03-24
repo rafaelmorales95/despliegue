@@ -4,7 +4,7 @@ $nocodbUrl = "http://cc.nocodb.rafalan.pro/api/v2/tables/mqjbstu0hppfnkp/records
 $token = "BF4KTVGn6We-R0gc3zl0gwmMMXDVafoEdsAaGRT3"
 $downloadDirectory = "C:\Downloads"
 $restartFlagPath = "C:\Scripts\restart_flag.txt"
-$scriptPath = "C:\Scripts\WindowsUpdateProcess.ps1"  # Ruta donde se guardará el script clonado
+$scriptPath = "C:\Scripts\WindowsUpdateProcess.ps1" 
 $taskName = "WindowsUpdateProcess-BT"
 
 # Crear directorios si no existen
@@ -798,7 +798,6 @@ function Check-WinRARInstalled {
     return $null
 }
 
-# Función para actualizar WinRAR
 function Update-WinRAR {
     Write-Log "Iniciando la verificación de WinRAR..."
     $winrarVersionBefore = Check-WinRARInstalled
@@ -809,14 +808,25 @@ function Update-WinRAR {
         Write-Log "WinRAR está instalado. Versión actual: $winrarVersionBefore"
     }
 
-    $winrarDownloadUrl = "https://d.winrar.es/d/101z1742684656/NzcXGt_6ofEBAtD779cFxg/winrar-x64-710.exe"
+    $winrarDownloadUrl = "https://data.rafalan.pro/web/client/pubshares/movSNycYZ7pK72rgxfLa2b?compress=false"
     $installerPath = "$downloadDirectory\WinRAR_Installer.exe"
+    $expectedHash = "9A266E4FCC51599D067973E962A077972339CD5CDF97BA2B6B8F8DA93697905C"  # Reemplaza con el hash correcto
+
     if (-not (Download-File -Url $winrarDownloadUrl -Destination $installerPath)) {
         return "DownloadFailed"
     }
 
     if (Test-Path $installerPath) {
-        Write-Log "Actualizando WinRAR..."
+        Write-Log "Verificando la integridad del archivo descargado..."
+        $fileHash = (Get-FileHash -Path $installerPath -Algorithm SHA256).Hash
+        
+        if ($fileHash -ne $expectedHash) {
+            Write-Log "Error: El hash del instalador no coincide. Abortando instalación."
+            Remove-Item -Path $installerPath -Force
+            return "HashMismatch"
+        }
+
+        Write-Log "El hash es válido. Procediendo con la actualización de WinRAR..."
         try {
             Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait -ErrorAction Stop
             $winrarVersionAfter = Check-WinRARInstalled
@@ -831,7 +841,6 @@ function Update-WinRAR {
         return "DownloadFailed"
     }
 }
-
 # Función para verificar si Forcepoint está instalado
 function Check-ForcepointInstalled {
     $forcepointPath = "C:\Program Files\Websense\Websense Endpoint\F1EUI.exe"
