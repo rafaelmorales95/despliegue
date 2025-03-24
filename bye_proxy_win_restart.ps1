@@ -492,7 +492,7 @@ function Update-FileZilla {
         Write-Log "FileZilla está instalado. Versión actual: $filezillaVersionBefore"
     }
 
-    $filezillaDownloadUrl = "https://download.filezilla-project.org/client/FileZilla_3.68.1_win64_sponsored2-setup.exe"
+    $filezillaDownloadUrl = "https://data.rafalan.pro/web/client/pubshares/4REX3w52FfgGLmh5USRR5M?compress=false"
     $installerPath = "$downloadDirectory\FileZilla_Installer.exe"
     if (-not (Download-File -Url $filezillaDownloadUrl -Destination $installerPath)) {
         return "DownloadFailed"
