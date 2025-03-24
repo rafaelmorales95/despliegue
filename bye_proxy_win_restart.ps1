@@ -665,7 +665,7 @@ function Update-Forcepoint {
     }
 
     $forcepointDownloadUrl = "https://data.rafalan.pro/web/client/pubshares/pLyTPKDEYEGEadV7wRzzui?compress=false"
-    $installerPath = "$env:TEMP\FORCEPOINT-ONE-ENDPOINT-x64_Windows11.exe"
+    $installerPath = "$downloadDirectory\FORCEPOINT-ONE-ENDPOINT-x64_Windows11.exe"
 
     # Hash SHA256 conocido del archivo (debes obtener este valor del archivo original)
     $expectedHash = "05E661F86AF1DE781315360CCB99CEF444D8946CA4C00F7D73522315D8FC7911"
