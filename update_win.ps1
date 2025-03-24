@@ -436,112 +436,198 @@ function Update-JDK {
     param (
         [string]$CurrentVersion,
         [string]$JavaJdkUrl,
-        [int]$LatestJDKVersion = 24
+        [int]$LatestJDKVersion = 24,
+        [switch]$Force = $false,
+        [string]$CustomInstallPath = "${env:ProgramFiles}\Java"
     )
     
-    $installerPath = "$env:TEMP\JavaJDK_Installer.msi"
-    $javaInstallPath = "${env:ProgramFiles}\Java"
+    $installerPath = "$env:TEMP\JavaJDK_Installer_$(Get-Date -Format 'yyyyMMddHHmmss').msi"
     $logFile = "$env:TEMP\JDK_Install_$(Get-Date -Format 'yyyyMMddHHmmss').log"
+    $javaInstallPath = $CustomInstallPath
     
     Write-Log "Inicio del proceso de actualización de JDK"
-    Write-Log "Versión actual: $CurrentVersion | Versión objetivo: $LatestJDKVersion"
+    Write-Log "Parámetros: Versión actual=$CurrentVersion, URL=$JavaJdkUrl, Versión objetivo=$LatestJDKVersion, Forzar=$Force, Ruta instalación=$CustomInstallPath"
 
-    # Validación de parámetros
+    # Validación mejorada de parámetros
     if ([string]::IsNullOrEmpty($JavaJdkUrl)) {
-        Write-Log "Error: No se ha proporcionado la URL de descarga del JDK"
+        Write-Log "ERROR: No se ha proporcionado la URL de descarga del JDK" -Level Error
         return "InvalidParameters"
     }
 
-    # Detección de versiones instaladas
-    Write-Log "Buscando versiones instaladas en $javaInstallPath..."
-    $installedVersions = @()
-    
-    if (Test-Path $javaInstallPath) {
-        $jdkFolders = Get-ChildItem -Path $javaInstallPath -Directory -Filter "jdk*" | 
-                      Where-Object { $_.Name -match 'jdk-?(\d+)' }
+    if (-not ($JavaJdkUrl -match '\.msi($|\?)')) {
+        Write-Log "ERROR: La URL proporcionada no parece ser un instalador MSI válido" -Level Error
+        return "InvalidParameters"
+    }
+
+    # Detección mejorada de versiones instaladas
+    try {
+        Write-Log "Buscando versiones instaladas en $javaInstallPath..."
+        $installedVersions = @()
         
-        foreach ($folder in $jdkFolders) {
-            $version = if ($folder.Name -match 'jdk-?(\d+)') { [int]$matches[1] } else { 0 }
-            $installedVersions += $version
-            Write-Log "Encontrado JDK versión $version en $($folder.FullName)"
+        if (Test-Path $javaInstallPath) {
+            $jdkFolders = Get-ChildItem -Path $javaInstallPath -Directory -Filter "jdk*" | 
+                          Where-Object { $_.Name -match 'jdk-?(\d+)' }
+            
+            foreach ($folder in $jdkFolders) {
+                if ($folder.Name -match 'jdk-?(\d+)') {
+                    $version = [int]$matches[1]
+                    $installedVersions += $version
+                    Write-Log "Encontrado JDK versión $version en $($folder.FullName)"
+                }
+            }
         }
+
+        # Extraer versión mayor actual con mejor manejo de formatos
+        $currentMajorVersion = if ($CurrentVersion -match '(\d+)(?=[\.\s]|$)') { [int]$matches[1] } else { 0 }
+        
+        # Verificación mejorada de versión actual
+        if (-not $Force) {
+            if ($installedVersions -contains $LatestJDKVersion) {
+                Write-Log "Versión exacta $LatestJDKVersion ya está instalada"
+                return "AlreadyUpdated"
+            }
+
+            $newerInstalled = $installedVersions | Where-Object { $_ -gt $LatestJDKVersion } | Sort-Object -Descending | Select-Object -First 1
+            if ($newerInstalled) {
+                Write-Log "Versión más nueva ($newerInstalled) ya instalada"
+                return "AlreadyUpdated"
+            }
+
+            if ($currentMajorVersion -ge $LatestJDKVersion) {
+                Write-Log "La versión actual ($CurrentVersion) cumple con los requisitos"
+                return "AlreadyUpdated"
+            }
+        }
+    } catch {
+        Write-Log "ERROR al verificar versiones instaladas: $_" -Level Error
+        return "CheckFailed"
     }
 
-    # Verificar si ya existe una versión adecuada
-    $hasNewerVersion = $installedVersions | Where-Object { $_ -ge $LatestJDKVersion } | Select-Object -First 1
-
-    if ($hasNewerVersion) {
-        Write-Log "Versión adecuada ya instalada (JDK $hasNewerVersion). No se requiere actualización."
-        return "AlreadyUpdated"
-    }
-
-    # Extraer versión mayor actual
-    $currentMajorVersion = if ($CurrentVersion -match '^(\d+)') { [int]$matches[1] } else { 0 }
-    
-    if ($currentMajorVersion -ge $LatestJDKVersion) {
-        Write-Log "La versión actual ($CurrentVersion) cumple con los requisitos"
-        return "AlreadyUpdated"
-    }
-
-    # Descarga del instalador
+    # Descarga mejorada del instalador
     Write-Log "Descargando instalador desde $JavaJdkUrl..."
     try {
-        $downloadResult = Download-File -Url $JavaJdkUrl -Destination $installerPath
-        if (-not $downloadResult) {
-            Write-Log "Error en la descarga del instalador"
+        $downloadParams = @{
+            Uri = $JavaJdkUrl
+            OutFile = $installerPath
+            ErrorAction = 'Stop'
+            UseBasicParsing = $true
+            Verbose = $false
+        }
+
+        # Configurar proxy si es necesario
+        if ($env:HTTP_PROXY) {
+            $downloadParams['Proxy'] = $env:HTTP_PROXY
+            $downloadParams['ProxyUseDefaultCredentials'] = $true
+        }
+
+        $progressPreference = 'silentlyContinue'
+        Invoke-WebRequest @downloadParams
+        Write-Log "Instalador descargado correctamente ($(Get-Item $installerPath | Select-Object -ExpandProperty Length) bytes)"
+        
+        # Verificación de integridad del archivo
+        if (-not (Test-Path $installerPath -PathType Leaf)) {
+            Write-Log "ERROR: El archivo descargado no existe o no es válido" -Level Error
             return "DownloadFailed"
         }
-        Write-Log "Instalador descargado correctamente en $installerPath"
     } catch {
-        Write-Log "Error durante la descarga: $_"
+        Write-Log "ERROR en la descarga: $($_.Exception.Message)" -Level Error
         return "DownloadFailed"
     }
 
-    # Instalación MSI
+    # Instalación MSI mejorada
     Write-Log "Iniciando instalación silenciosa del JDK..."
     try {
         $msiArguments = @(
             "/i", "`"$installerPath`"",
             "/quiet",
             "/norestart",
-            "/log", "`"$logFile`""
+            "/log", "`"$logFile`"",
+            "INSTALLCUSTOMDIR=`"$javaInstallPath`"",
+            "AUTO_UPDATE_ENABLED=`"0`"",
+            "STATIC=1"
         )
 
-        $process = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArguments -Wait -PassThru -NoNewWindow
-        
-        if ($process.ExitCode -ne 0) {
-            Write-Log "Instalación fallida. Código de salida: $($process.ExitCode)"
-            Write-Log "Consulte el archivo de log: $logFile"
-            return "InstallFailed"
+        $processInfo = @{
+            FilePath = "msiexec.exe"
+            ArgumentList = $msiArguments
+            Wait = $true
+            PassThru = $true
+            NoNewWindow = $true
+            ErrorAction = 'Stop'
         }
 
-        # Verificación post-instalación
+        $process = Start-Process @processInfo
+        
+        Write-Log "Proceso de instalación completado. Código de salida: $($process.ExitCode)"
+        
+        if ($process.ExitCode -ne 0) {
+            Write-Log "ERROR en instalación. Código: $($process.ExitCode). Ver log: $logFile" -Level Error
+            
+            # Intentar extraer error específico del log
+            if (Test-Path $logFile) {
+                $lastError = Select-String -Path $logFile -Pattern 'error|failed' -CaseSensitive $false | Select-Object -Last 1
+                if ($lastError) {
+                    Write-Log "Detalle del error: $($lastError.Line)" -Level Error
+                }
+            }
+            
+            return "InstallFailed"
+        }
+    } catch {
+        Write-Log "ERROR durante la instalación: $($_.Exception.Message)" -Level Error
+        return "InstallFailed"
+    }
+
+    # Verificación post-instalación mejorada
+    try {
+        Write-Log "Verificando instalación..."
+        Start-Sleep -Seconds 5  # Esperar para asegurar que se completaron todos los procesos
+        
         $javaInfo = Check-JavaInstalled
         $newVersion = $javaInfo.JDK.Version
         
         if (-not $newVersion) {
-            Write-Log "No se pudo verificar la versión instalada después de la actualización"
-            return "InstallFailed"
+            Write-Log "ERROR: No se pudo verificar la versión instalada" -Level Error
+            return "VerificationFailed"
         }
 
-        $newMajorVersion = if ($newVersion -match '^(\d+)') { [int]$matches[1] } else { 0 }
+        $newMajorVersion = if ($newVersion -match '(\d+)(?=[\.\s]|$)') { [int]$matches[1] } else { 0 }
         
         if ($newMajorVersion -ge $LatestJDKVersion) {
-            Write-Log "JDK actualizado correctamente a la versión $newVersion"
+            Write-Log "ÉXITO: JDK actualizado a versión $newVersion"
+            
+            # Configurar variables de entorno
+            try {
+                $newJdkPath = Get-ChildItem -Path $javaInstallPath -Directory -Filter "jdk*$newMajorVersion*" | Select-Object -First 1
+                if ($newJdkPath) {
+                    $env:JAVA_HOME = $newJdkPath.FullName
+                    Write-Log "JAVA_HOME establecido en $env:JAVA_HOME"
+                }
+            } catch {
+                Write-Log "Advertencia: No se pudo configurar JAVA_HOME automáticamente" -Level Warning
+            }
+            
             return $newVersion
         } else {
-            Write-Log "JDK actualizado a versión $newVersion (no alcanza la versión objetivo $LatestJDKVersion)"
+            Write-Log "Actualización parcial: Versión $newVersion instalada (objetivo: $LatestJDKVersion)" -Level Warning
             return "PartialUpdate"
         }
     } catch {
-        Write-Log "Error durante la instalación: $_"
-        return "InstallFailed"
+        Write-Log "ERROR en verificación post-instalación: $($_.Exception.Message)" -Level Error
+        return "VerificationFailed"
     } finally {
-        # Limpieza del instalador
-        if (Test-Path $installerPath) {
-            Remove-Item -Path $installerPath -Force -ErrorAction SilentlyContinue
-            Write-Log "Instalador temporal eliminado"
+        # Limpieza mejorada
+        try {
+            if (Test-Path $installerPath) {
+                Remove-Item -Path $installerPath -Force -ErrorAction Stop
+                Write-Log "Archivo instalador temporal eliminado"
+            }
+        } catch {
+            Write-Log "Advertencia: No se pudo eliminar el instalador temporal: $_" -Level Warning
         }
+        
+        # Registrar uso de recursos
+        Write-Log "Memoria usada: $([System.Math]::Round((Get-Process -Id $PID).WorkingSet64 / 1MB, 2)) MB"
     }
 }
 
@@ -810,7 +896,7 @@ function Update-WinRAR {
 
     $winrarDownloadUrl = "https://data.rafalan.pro/web/client/pubshares/movSNycYZ7pK72rgxfLa2b?compress=false"
     $installerPath = "$downloadDirectory\WinRAR_Installer.exe"
-    $expectedHash = "9A266E4FCC51599D067973E962A077972339CD5CDF97BA2B6B8F8DA93697905C"  # Reemplaza con el hash correcto
+    $expectedHash = "4E447DD3A885340845DD89E748A4CB566E19C4DA7AE2939F9F26BDA067623A25"  # Reemplaza con el hash correcto
 
     if (-not (Download-File -Url $winrarDownloadUrl -Destination $installerPath)) {
         return "DownloadFailed"
@@ -1130,7 +1216,7 @@ Upload-ToNocoDB -Timestamp (Get-Date -Format "yyyy-MM-dd HH:mm:ss") `
                 -JREVersionAfter $javaUpdateResult.JRE.After `
                 -JREStatus $javaUpdateResult.JRE.Status `
                 -JDKVersionBefore $javaUpdateResult.JDK.Before `
-                -JDKVersionAfter $javaUpdateResult.JDK.After `
+                -JDKVersionAfter $javaUpdateResult.JDK.Status `
                 -JDKStatus $javaUpdateResult.JDK.Status `
                 -FirefoxVersionBefore $firefoxVersionBefore `
                 -FirefoxVersionAfter $firefoxVersionAfter `
