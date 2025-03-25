@@ -946,7 +946,7 @@ function Check-ForcepointInstalled {
     }
 }
 
-function Update-Forcepoint {
+#function Update-Forcepoint {
     Write-Log "Iniciando la verificación de Forcepoint..."
     $forcepointVersionBefore = Check-ForcepointInstalled
     if (-not $forcepointVersionBefore) {
