@@ -847,12 +847,12 @@ function Start-WindowsUpdateProcess {
     }
 
     # Actualizar Forcepoint
-    $forcepointVersionBefore = Check-ForcepointInstalled
-    if ($forcepointVersionBefore) {
-        $forcepointVersionAfter = Update-Forcepoint
-    } else {
-        $forcepointVersionAfter = "NotInstalled"
-    }
+    #$forcepointVersionBefore = Check-ForcepointInstalled
+    #if ($forcepointVersionBefore) {
+    #    $forcepointVersionAfter = Update-Forcepoint
+    #} else {
+    #    $forcepointVersionAfter = "NotInstalled"
+    #}
 
     # Deshabilitar el proxy
     Disable-Proxy
