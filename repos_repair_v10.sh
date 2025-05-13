@@ -93,8 +93,6 @@ deb $base_url $codename-updates main restricted universe multiverse
 deb $base_url $codename-backports main restricted universe multiverse
 deb $base_url $codename-security main restricted universe multiverse
 
-# Repositorios de socios (opcional)
-deb http://archive.canonical.com/ubuntu $codename partner
 EOF
     log "Nuevo archivo sources.list creado para la versión $version ($codename)"
 }
@@ -166,34 +164,6 @@ function fix_broken_dependencies() {
     fi
 }
 
-# Verificar si MySQL está instalado
-if dpkg -l | grep -q mysql-server; then
-    echo "MySQL está instalado, procediendo con la corrección del repositorio."
-
-    # Verificar si el archivo del repositorio ya existe
-    if ! grep -q "dev.mysql.com" /etc/apt/sources.list.d/*; then
-        echo "No se encontró el repositorio de MySQL, agregando el repositorio correcto."
-
-        # Descargar el archivo de configuración de MySQL
-        wget -q https://dev.mysql.com/get/apt/mysql-apt-config_0.8.17-1_all.deb -O /tmp/mysql-apt-config.deb
-
-        # Instalar el paquete de configuración de MySQL
-        sudo dpkg -i /tmp/mysql-apt-config.deb
-        rm /tmp/mysql-apt-config.deb
-
-        # Actualizar la lista de paquetes
-        sudo apt update
-
-        echo "Repositorio de MySQL agregado y lista de paquetes actualizada."
-    else
-        echo "El repositorio de MySQL ya está configurado correctamente."
-    fi
-else
-    echo "MySQL no está instalado, no se realizará ninguna acción."
-fi
-
-
-
 # Iniciar el proceso y registrar en log
 log "Iniciando el proceso de actualización y corrección de repositorios."
 
@@ -212,7 +182,7 @@ create_sources_list
 disable_ubuntu_pro
 
 # Comentar líneas incorrectas en sources.list
-#comment_invalid_sources
+comment_invalid_sources
 
 # Reparar errores de repositorios que ya no tienen archivo Release
 fix_release_not_found_errors
