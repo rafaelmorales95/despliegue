@@ -1,15 +1,16 @@
-﻿<#
+<#
 .SYNOPSIS
     Script completo para gestionar la instalación de Forcepoint 24.11 según los requerimientos específicos
 .DESCRIPTION
     Este script realiza las siguientes acciones:
     1. Verifica si Forcepoint 24.11 está instalado
     2. Si no está, desinstala cualquier versión existente
-    3. Prepara el sistema para reinicio
-    4. Después del reinicio, instala Forcepoint 24.11 desde data.rafalan.pro
-    5. Reporta el estado a un servidor NocoDB
+    3. Si no puede desinstalar, instala forzosamente la versión 24.11
+    4. Prepara el sistema para reinicio si es necesario
+    5. Después del reinicio, instala Forcepoint 24.11 desde data.rafalan.pro
+    6. Reporta el estado a un servidor NocoDB
 .NOTES
-    Versión: 2.0
+    Versión: 2.1
     Autor: Tu Nombre
     Fecha: $(Get-Date -Format "yyyy-MM-dd")
 #>
@@ -22,8 +23,8 @@ $global:downloadDirectory = "C:\Downloads"
 $global:restartFlagPath = "C:\Scripts\restart_flag.txt"
 $global:scriptPath = "C:\Scripts\ForcepointUpdateProcess.ps1"
 $global:taskName = "ForcepointUpdateProcess"
-$global:forcepointDownloadUrl = "https://data.rafalan.pro/web/client/pubshares/pLyTPKDEYEGEadV7wRzzui?compress=false"
-$global:expectedHash = "05E661F86AF1DE781315360CCB99CEF444D8946CA4C00F7D73522315D8FC7911"
+$global:forcepointDownloadUrl = "https://github.com/rafaelmorales95/despliegue/releases/download/forcepoint/FORCEPOINT-ONE-ENDPOINT-x64-24-11-Sin-Web-Security.exe"
+$global:expectedHash = "26FA78EBC169F103DBA43760721F635956DA43A6100609A3F1A4055B07E4F76F"
 
 #region Funciones de Utilidad
 
@@ -316,6 +317,34 @@ function Install-Forcepoint {
     }
 }
 
+function Force-Install-Forcepoint {
+    try {
+        Write-Log "=== INICIANDO INSTALACIÓN FORZOSA DE FORCEPOINT 24.11 ==="
+        
+        # 1. Detener procesos relacionados con Forcepoint
+        try {
+            Get-Process -Name "wssc*, wsm*" -ErrorAction SilentlyContinue | Stop-Process -Force
+            Write-Log "Procesos de Forcepoint detenidos"
+        } catch {
+            Write-Log "No se pudieron detener todos los procesos de Forcepoint: $_" "WARNING"
+        }
+        
+        # 2. Instalar la nueva versión
+        $installResult = Install-Forcepoint
+        
+        if ($installResult) {
+            Write-Log "Instalación forzosa completada con éxito"
+            return $true
+        }
+        
+        Write-Log "Fallo en la instalación forzosa" "ERROR"
+        return $false
+    } catch {
+        Write-Log "Error en Force-Install-Forcepoint: $_" "ERROR"
+        return $false
+    }
+}
+
 #endregion
 
 #region Funciones de Reinicio y Tareas
@@ -544,9 +573,19 @@ function Handle-FirstRun {
             $uninstallResult = Remove-Forcepoint
             
             if (-not $uninstallResult) {
-                Write-Log "No se pudo desinstalar Forcepoint existente" "ERROR"
-                Send-Report -Status "Failed" -Message "Fallo al desinstalar Forcepoint $currentVersion" -VersionBefore $currentVersion -VersionAfter $currentVersion
-                exit 1
+                Write-Log "No se pudo desinstalar Forcepoint existente, intentando instalación forzosa..." "WARNING"
+                
+                # Intentar instalación forzosa
+                $forceInstallResult = Force-Install-Forcepoint
+                
+                if ($forceInstallResult) {
+                    $newVersion = Get-ForcepointVersion
+                    Send-Report -Status "Success" -Message "Instalación forzosa completada" -VersionBefore $currentVersion -VersionAfter $newVersion
+                    exit 0
+                } else {
+                    Send-Report -Status "Failed" -Message "Fallo en desinstalación e instalación forzosa" -VersionBefore $currentVersion
+                    exit 1
+                }
             }
         }
         
