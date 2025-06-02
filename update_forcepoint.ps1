@@ -142,6 +142,35 @@ function Get-ForcepointProductCode {
     }
 }
 
+function Get-ForcepointVersion {
+    try {
+        $uninstallPaths = @(
+            "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+        )
+        
+        $versions = $uninstallPaths | ForEach-Object {
+            if (Test-Path $_) {
+                Get-ItemProperty $_ | Where-Object {
+                    $_.DisplayName -match 'Forcepoint|Websense' -and $_.DisplayVersion
+                } | Select-Object DisplayVersion
+            }
+        } | Sort-Object DisplayVersion -Descending | Select-Object -First 1
+
+        if ($versions) {
+            $version = $versions.DisplayVersion
+            Write-Log "Versión detectada: $version"
+            return $version
+        }
+        
+        Write-Log "No se encontró Forcepoint instalado" "INFO"
+        return $null
+    } catch {
+        Write-Log "Error al verificar versión: $_" "ERROR"
+        return $null
+    }
+}
+
 function Remove-Forcepoint {
     try {
         Write-Log "=== INICIANDO DESINSTALACIÓN DE FORCEPOINT ==="
