@@ -249,23 +249,6 @@ function Remove-Forcepoint {
     }
 }
 
-function Get-ForcepointVersion {
-    try {
-        $uninstallPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
-        $forcepointEntry = Get-ItemProperty $uninstallPath | Where-Object {
-            $_.DisplayName -match "Forcepoint|Websense"
-        } | Select-Object -First 1
-
-        if ($forcepointEntry) {
-            return $forcepointEntry.DisplayVersion
-        }
-        return $null
-    } catch {
-        Write-Log "Error al obtener versión de Forcepoint: $_" "ERROR"
-        return $null
-    }
-}
-
 function Get-ForcepointInstaller {
     try {
         $installerPath = "$global:downloadDirectory\FORCEPOINT-ONE-ENDPOINT-24.11.exe"
