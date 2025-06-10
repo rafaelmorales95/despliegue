@@ -93,6 +93,31 @@ disable_and_uninstall_auditd() {
     fi
 }
 
+# Función para habilitar e iniciar auditd si no está activo
+enable_and_start_auditd() {
+    echo "Verificando el estado del servicio 'auditd'..."
+
+    # Instalar auditd si no está instalado
+    if ! dpkg -l | grep -qw auditd; then
+        echo "'auditd' no está instalado. Instalándolo..."
+        sudo apt-get update && sudo apt-get install auditd -y
+    fi
+
+    # Habilitar el servicio
+    sudo systemctl enable auditd
+
+    # Iniciar el servicio si no está activo
+    if ! systemctl is-active --quiet auditd; then
+        echo "Iniciando el servicio 'auditd'..."
+        sudo systemctl start auditd
+    else
+        echo "El servicio 'auditd' ya está activo."
+    fi
+
+    echo "El servicio 'auditd' ha sido habilitado e iniciado."
+}
+
+
 # Función para verificar si el proceso bdsec está activo
 check_bdsec_process() {
     echo "Verificando si el proceso 'bdsec' está activo..."
@@ -132,7 +157,7 @@ main() {
     download_file "${DOWNLOAD_URL_2}" "${FILE_NAME_2}"
     
     # Ejecutar las funciones como usuario 'soporte'
-    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent"
+    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent; $(declare -f enable_and_start_auditd); enable_and_start_auditd"
     
     # Verificar si el proceso bdsec está activo
     check_bdsec_process
