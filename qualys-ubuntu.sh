@@ -132,7 +132,7 @@ main() {
     download_file "${DOWNLOAD_URL_2}" "${FILE_NAME_2}"
     
     # Ejecutar las funciones como usuario 'soporte'
-    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent; $(declare -f disable_and_uninstall_auditd); disable_and_uninstall_auditd"
+    echo "${PASSWORD}" | sudo -S -u ${USER} bash -c "$(declare -f install_deb_package); install_deb_package; $(declare -f activate_qualys_agent); activate_qualys_agent"
     
     # Verificar si el proceso bdsec está activo
     check_bdsec_process
