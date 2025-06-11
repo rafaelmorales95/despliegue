@@ -6,7 +6,7 @@ NOMBRE_DEB="hardening-tool_2.6_all.deb"
 COMANDO="hardening-tool"             
 
 # Verificar e instalar curl si no está presente
-if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+if ! command -v curl &> /dev/null &&
     echo "[+] Instalando curl..."
     sudo apt-get update
     sudo apt-get install -y curl
