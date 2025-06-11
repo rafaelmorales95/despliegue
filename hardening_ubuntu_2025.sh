@@ -1,13 +1,24 @@
 #!/bin/bash
 
 # Definir variables
-URL_DEB="https://data.rafalan.pro/web/client/pubshares/jU84V2mWDbMeDvz2ecjG3P?compress=false"  
-NOMBRE_DEB="hardening-tool_2.6_all.deb"                   
-COMANDO="hardening-tool"              
+URL_DEB="https://data.rafalan.pro/web/client/pubshares/jU84V2mWDbMeDvz2ecjG3P?compress=false" 
+NOMBRE_DEB="hardening-tool_2.6_all.deb"                
+COMANDO="hardening-tool"             
 
-# Descargar el archivo .deb
+# Verificar e instalar curl si no está presente
+if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+    echo "[+] Instalando curl..."
+    sudo apt-get update
+    sudo apt-get install -y curl
+fi
+
+# Descargar el archivo .deb usando curl (preferido) o wget
 echo "[+] Descargando $NOMBRE_DEB..."
-wget -O "$NOMBRE_DEB" "$URL_DEB"
+if command -v curl &> /dev/null; then
+    curl -L "$URL_DEB" -o "$NOMBRE_DEB"
+else
+    wget -O "$NOMBRE_DEB" "$URL_DEB"
+fi
 
 # Verificar si la descarga fue exitosa
 if [ $? -ne 0 ]; then
