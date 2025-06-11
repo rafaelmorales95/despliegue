@@ -1,29 +1,32 @@
 #!/bin/bash
 
 # Definir variables
-URL_DEB="https://data.rafalan.pro/web/client/pubshares/jU84V2mWDbMeDvz2ecjG3P?compress=false" 
-NOMBRE_DEB="hardening-tool_2.6_all.deb"                
-COMANDO="hardening-tool"             
+URL_DEB="https://data.rafalan.pro/web/client/pubshares/jU84V2mWDbMeDvz2ecjG3P?compress=false"  
+NOMBRE_DEB="hardening-tool_2.6_all.deb"                   
+COMANDO="hardening-tool"              
 
-# Verificar e instalar curl si no está presente
-if command -v curl &> /dev/null 
-    echo "[+] Instalando curl..."
-    sudo apt-get update
-    sudo apt-get install -y curl
+# Instalar curl y wget si no están presentes (obligatorio)
+echo "[+] Instalando curl y wget (requeridos)..."
+sudo apt-get update
+sudo apt-get install -y curl wget
+
+# Verificar si la instalación fue exitosa
+if ! command -v curl &> /dev/null || ! command -v wget &> /dev/null; then
+    echo "[!] Error: No se pudo instalar curl o wget"
+    exit 1
 fi
 
-# Descargar el archivo .deb usando curl (preferido) o wget
+# Descargar el archivo .deb (usando wget como predeterminado)
 echo "[+] Descargando $NOMBRE_DEB..."
-if command -v curl &> /dev/null; then
-    curl -L "$URL_DEB" -o "$NOMBRE_DEB"
-else
-    wget -O "$NOMBRE_DEB" "$URL_DEB"
-fi
+wget -O "$NOMBRE_DEB" "$URL_DEB"
 
 # Verificar si la descarga fue exitosa
 if [ $? -ne 0 ]; then
-    echo "[!] Error al descargar el archivo .deb"
-    exit 1
+    echo "[!] Falló wget, intentando con curl..."
+    curl -L "$URL_DEB" -o "$NOMBRE_DEB" || {
+        echo "[!] Error al descargar el archivo .deb con ambos métodos"
+        exit 1
+    }
 fi
 
 # Instalar el paquete
