@@ -11,9 +11,10 @@ log() {
 # Función para crear un backup del archivo sources.list
 function backup_sources_list() {
     if [ -f /etc/apt/sources.list ]; then
+        timestamp=$(date '+%Y%m%d%H%M%S')
         log "Creando un backup del archivo /etc/apt/sources.list..."
-        cp /etc/apt/sources.list /etc/apt/sources.list.bak_$(date '+%Y%m%d%H%M%S')
-        log "Backup creado en /etc/apt/sources.list.bak_$(date '+%Y%m%d%H%M%S')."
+        cp /etc/apt/sources.list /etc/apt/sources.list.bak_$timestamp
+        log "Backup creado en /etc/apt/sources.list.bak_$timestamp."
     else
         log "El archivo /etc/apt/sources.list no existe, no es necesario hacer un backup."
     fi
@@ -24,9 +25,9 @@ function disable_ubuntu_pro() {
     log "Desactivando Ubuntu Pro (anteriormente Ubuntu Advantage)..."
 
     if grep -q "pro" /etc/apt/sources.list; then
-        log "Comentando repositorios relacionados con Ubuntu Pro en /etc/apt/sources.list..."
+        log "Eliminando repositorios relacionados con Ubuntu Pro en /etc/apt/sources.list..."
         sed -i '/pro/d' /etc/apt/sources.list
-        log "Repositorios de Ubuntu Pro comentados."
+        log "Repositorios de Ubuntu Pro eliminados."
     else
         log "No se encontraron repositorios de Ubuntu Pro en /etc/apt/sources.list."
     fi
@@ -43,17 +44,16 @@ function disable_ubuntu_pro() {
     log "Ubuntu Pro desactivado correctamente."
 }
 
+# Función para corregir la actualización de Google Chrome
 function fix_google_chrome_update() {
     log "Corrigiendo el error de actualización de Google Chrome..."
 
-    # Verificar y eliminar el archivo de clave si ya existe
     if [ -f /usr/share/keyrings/google-chrome.gpg ]; then
-        sudo rm /usr/share/keyrings/google-chrome.gpg
+        rm /usr/share/keyrings/google-chrome.gpg
         log "Archivo de clave antiguo eliminado."
     fi
 
-    # Descargar la clave y crear el archivo keyring (sobrescribiendo sin preguntar)
-    wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/google-chrome.gpg
+    wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
     if [ $? -eq 0 ]; then
         log "Clave de firma de Google Chrome descargada y guardada correctamente."
     else
@@ -61,23 +61,15 @@ function fix_google_chrome_update() {
         exit 1
     fi
 
-    # Crear el archivo de repositorio de Google Chrome
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
-    if [ $? -eq 0 ]; then
-        log "Repositorio de Google Chrome configurado correctamente en /etc/apt/sources.list.d/google-chrome.list."
-    else
-        log "Error al configurar el repositorio de Google Chrome."
-        exit 1
-    fi
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+    log "Repositorio de Google Chrome configurado correctamente."
 }
 
-
-# Función para crear un nuevo sources.list basado en la versión de Ubuntu
+# Crear nuevo sources.list basado en la versión de Ubuntu
 function create_sources_list() {
     version=$(lsb_release -rs)
     codename=$(lsb_release -cs)
 
-    # Definir el repositorio base
     if (( $(echo "$version < 18.04" | bc -l) )) || [ "$version" == "20.10" ]; then
         base_url="http://old-releases.ubuntu.com/ubuntu"
     elif (( $(echo "$version >= 18.04" | bc -l) && $(echo "$version < 20.04" | bc -l) )); then
@@ -94,12 +86,13 @@ deb $base_url $codename-backports main restricted universe multiverse
 deb $base_url $codename-security main restricted universe multiverse
 
 EOF
-    log "Nuevo archivo sources.list creado para la versión $version ($codename)"
+
+    log "Nuevo archivo sources.list creado para la versión $version ($codename)."
 }
 
-# Función para comentar líneas incorrectas en sources.list
+# Comentar líneas inválidas en sources.list y sources.list.d/*.list
 function comment_invalid_sources() {
-    log "Verificando líneas incorrectas en sources.list..."
+    log "Verificando líneas incorrectas en los repositorios..."
 
     apt_output=$(apt update 2>&1)
     echo "$apt_output" | tee -a "$log_file"
@@ -107,26 +100,31 @@ function comment_invalid_sources() {
     invalid_sources=$(echo "$apt_output" | grep -Eo '(Err:|W:|Fallo al obtener).*http.*')
 
     if [ -n "$invalid_sources" ]; then
-        log "Se encontraron líneas inválidas o con advertencias en el sources.list. Procediendo a comentarlas..."
+        log "Se encontraron líneas inválidas. Procediendo a comentarlas..."
 
         while IFS= read -r line; do
             url=$(echo "$line" | grep -oP '(http|https)://\S+')
-
             if [ -n "$url" ]; then
                 log "Comentando la línea con el repositorio: $url"
-                sed -i "s|^deb.*$url|#&|" /etc/apt/sources.list
+
+                sed -i "s|^deb .*${url}|#&|" /etc/apt/sources.list
+
+                grep -rl "$url" /etc/apt/sources.list.d/*.list 2>/dev/null | while read -r file; do
+                    sed -i "s|^deb .*${url}|#&|" "$file"
+                    log "Comentado en $file"
+                done
             fi
         done <<< "$invalid_sources"
 
-        log "Las líneas inválidas o con advertencias han sido comentadas."
+        log "Las líneas inválidas han sido comentadas."
     else
-        log "No se encontraron errores ni advertencias relacionadas con repositorios en apt update."
+        log "No se encontraron errores relacionados con los repositorios."
     fi
 }
 
-# Función para reparar repositorios que ya no tienen un archivo Release
+# Eliminar repositorios sin archivo Release
 function fix_release_not_found_errors() {
-    log "Buscando y reparando errores de repositorios sin archivo Release..."
+    log "Revisando errores por falta de archivo Release..."
 
     apt_output=$(apt update 2>&1)
     echo "$apt_output" | tee -a "$log_file"
@@ -134,66 +132,69 @@ function fix_release_not_found_errors() {
     release_errors=$(echo "$apt_output" | grep -E '(E:|N:).*Release')
 
     if [ -n "$release_errors" ]; then
-        log "Se encontraron errores relacionados con repositorios sin archivo Release. Procediendo a eliminarlos..."
+        log "Eliminando repositorios sin archivo Release..."
 
         while IFS= read -r line; do
             url=$(echo "$line" | grep -oP '(http|https)://\S+')
-
             if [ -n "$url" ]; then
-                log "Eliminando el repositorio: $url"
-                sed -i "/$url/d" /etc/apt/sources.list /etc/apt/sources.list.d/*.list
+                log "Eliminando entradas con $url"
+
+                sed -i "/$url/d" /etc/apt/sources.list
+                find /etc/apt/sources.list.d/ -type f -name "*.list" -exec sed -i "/$url/d" {} \;
             fi
         done <<< "$release_errors"
 
-        log "Los repositorios sin archivo Release han sido eliminados."
+        log "Repositorios problemáticos eliminados."
     else
-        log "No se encontraron errores de repositorios sin archivo Release."
+        log "No se encontraron errores de tipo Release."
     fi
 }
 
-# Función para manejar dependencias rotas
+# Verificar dependencias rotas
 function fix_broken_dependencies() {
     log "Verificando dependencias rotas..."
     dpkg_audit_output=$(dpkg --audit 2>&1)
 
     if [ -n "$dpkg_audit_output" ]; then
-        log "Se encontraron problemas de dependencias rotas. Detalles:"
+        log "Se encontraron dependencias rotas:"
         log "$dpkg_audit_output"
     else
-        log "No se encontraron problemas de dependencias rotas."
+        log "No se encontraron problemas de dependencias."
     fi
 }
 
-# Iniciar el proceso y registrar en log
-log "Iniciando el proceso de actualización y corrección de repositorios."
+# ------------------------ EJECUCIÓN PRINCIPAL ------------------------
 
-# Crear un backup del archivo sources.list antes de borrarlo
+log "=== Iniciando el proceso de verificación y reparación de repositorios ==="
+
+# Verificar permisos
+if [ "$EUID" -ne 0 ]; then
+    echo "Este script debe ejecutarse como root." >&2
+    exit 1
+fi
+
+# Crear backup
 backup_sources_list
 
-# Borrar el archivo sources.list actual
-log "Borrando el archivo sources.list..."
-rm /etc/apt/sources.list
-log "El archivo sources.list ha sido borrado."
+# Desactivar Ubuntu Pro si es necesario
+#disable_ubuntu_pro
 
-# Crear un nuevo archivo sources.list
-create_sources_list
-
-# Desactivar Ubuntu Pro
-disable_ubuntu_pro
-
-# Comentar líneas incorrectas en sources.list
+# Verificar y comentar líneas inválidas
 comment_invalid_sources
 
-# Reparar errores de repositorios que ya no tienen archivo Release
+# Eliminar entradas sin archivo Release
 fix_release_not_found_errors
 
-# Añadir clave de firma de Google Chrome
+# Borrar y regenerar sources.list
+rm -f /etc/apt/sources.list
+log "Archivo /etc/apt/sources.list eliminado."
+create_sources_list
+
+# Corregir repositorio y clave de Google Chrome
 fix_google_chrome_update
 
-# Verificar y arreglar dependencias rotas
+# Verificar dependencias rotas
 fix_broken_dependencies
 
-
-log "Proceso completado."
-
-# Salir con éxito
+log "=== Proceso completado correctamente ==="
+exit 0
